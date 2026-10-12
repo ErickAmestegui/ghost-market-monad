@@ -26,8 +26,9 @@ import { GhostGuardian } from "@/ui/ghost-guardian";
 import { HomeExperience } from "@/ui/home-experience";
 import { HistoricalReplay } from "@/ui/historical-replay";
 import { EvidenceRoom } from "@/ui/evidence-room";
+import { MonadNetworkPulse } from "@/ui/monad-network-pulse";
 
-type Section = "home" | "live" | "lens" | "guardian" | "pulse" | "replay" | "judge" | "demo" | "learn" | "about";
+type Section = "home" | "monad" | "live" | "lens" | "guardian" | "pulse" | "replay" | "judge" | "demo" | "learn" | "about";
 type DisplayMode = "simple" | "pro";
 type DemoPanel = "brain" | "council" | "scenarios" | "research" | "pulse";
 type DataState = "LIVE" | "CACHED" | "REJECTED" | "UNAVAILABLE" | "ERROR" | "SIMULATED" | "DEMO" | "LOADING";
@@ -40,6 +41,7 @@ const ASSETS: Array<{ symbol: SymbolKey; token: string; company: string; note: {
 
 const NAV: Array<{ id: Section; icon: typeof Home; en: string; es: string }> = [
   { id: "home", icon: Home, en: "Home", es: "Inicio" },
+  { id: "monad", icon: RadioTower, en: "Monad Pulse", es: "Pulso Monad" },
   { id: "live", icon: ShieldCheck, en: "Live Evidence", es: "Evidencia" },
   { id: "lens", icon: Radar, en: "Wallet Lens", es: "Wallet Lens" },
   { id: "guardian", icon: ShieldCheck, en: "Guardian", es: "Guardian" },
@@ -57,7 +59,7 @@ const percent = (value: number | null | undefined) => value == null ? "Not avail
 const dateTime = (value: string | null | undefined, locale: Locale) => value ? new Date(value).toLocaleString(locale === "en" ? "en-US" : "es-BO", { dateStyle: "medium", timeStyle: "short" }) : t(locale, "Not supplied", "No proporcionado");
 
 export default function GhostMarket() {
-  const [section, setSection] = useState<Section>("home");
+  const [section, setSection] = useState<Section>("monad");
   const [liveStep, setLiveStep] = useState(0);
   const [symbol, setSymbol] = useState<SymbolKey>("AAPL");
   const [locale, setLocale] = useState<Locale>("en");
@@ -96,6 +98,7 @@ export default function GhostMarket() {
     <ComprehensionProgress locale={locale} section={section} liveStep={liveStep} demoChapter={demoChapter} />
     <div className="mode-brief" role="status"><SlidersHorizontal /><span>{displayMode === "simple" ? t(locale, "SIMPLE · Guided essentials; every risk remains visible", "SIMPLE · Esenciales guiados; todos los riesgos siguen visibles") : t(locale, "PRO · Full sources, request IDs and quality gates", "PRO · Fuentes, request IDs y controles de calidad completos")}</span></div>
     {section === "home" && <HomeExperience locale={locale} onInvestigate={() => navigate("guardian")} onReplay={() => navigate("replay")} onJudge={() => navigate("judge")} />}
+    {section === "monad" && <MonadNetworkPulse locale={locale} />}
     {section === "live" && <LiveJourney locale={locale} displayMode={displayMode} step={liveStep} symbol={symbol} loading={loading} evidence={evidence} binance={binance} rwa={rwa} walletSkill={walletSkill} live={live} onStep={setLiveStep} onSelect={chooseAsset} onReload={reload} onDemo={startDemo} />}
     {section === "lens" && <WalletLens locale={locale} onInvestigate={() => { setLiveStep(1); navigate("live"); }} />}
     {section === "guardian" && <GhostGuardian locale={locale} displayMode={displayMode} />}
@@ -106,18 +109,18 @@ export default function GhostMarket() {
     {section === "learn" && <Learn locale={locale} />}
     {section === "about" && <About locale={locale} binance={binance} rwa={rwa} />}
     <MobileNav section={section} locale={locale} onNavigate={navigate} />
-    <footer className="gm-footer"><div><GhostGlyph /><span>Ghost Market Beta 0.9</span></div><p>{t(locale, "Evidence and education, never financial advice.", "Evidencia y educación, nunca asesoramiento financiero.")}</p><a href="/docs">{t(locale, "Technical documentation", "Documentación técnica")} <ExternalLink /></a></footer>
+    <footer className="gm-footer"><div><GhostGlyph /><span>Ghost Market · Monad Edition</span></div><p>{t(locale, "Evidence and education, never financial advice.", "Evidencia y educación, nunca asesoramiento financiero.")}</p><a href="/docs">{t(locale, "Technical documentation", "Documentación técnica")} <ExternalLink /></a></footer>
   </main>;
 }
 
 function Header({ section, locale, displayMode, calmMode, onNavigate, onLocale, onMode, onCalm }: { section: Section; locale: Locale; displayMode: DisplayMode; calmMode: boolean; onNavigate: (section: Section) => void; onLocale: (locale: Locale) => void; onMode: (mode: DisplayMode) => void; onCalm: () => void }) {
   const calmLabel = calmMode ? t(locale, "Calm · motion reduced", "Calma · movimiento reducido") : t(locale, "Calm", "Calma");
-  return <header className="gm-header"><button className="gm-brand" onClick={() => onNavigate("home")} aria-label={t(locale, "Go home", "Ir al inicio")}><GhostGlyph /><span>GHOST MARKET<small>GOLDEN EDITION · BETA 0.9</small></span></button><nav aria-label={t(locale, "Main navigation", "Navegación principal")}>{NAV.map((item) => <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => onNavigate(item.id)}>{locale === "en" ? item.en : item.es}</button>)}</nav><div className="gm-tools"><div className="segmented" aria-label={t(locale, "Information depth", "Profundidad de información")}><button className={displayMode === "simple" ? "active" : ""} title={t(locale, "Guided essentials with all risks visible", "Esenciales guiados con todos los riesgos visibles")} onClick={() => onMode("simple")}>Simple</button><button className={displayMode === "pro" ? "active" : ""} title={t(locale, "Full evidence and technical metadata", "Evidencia completa y metadatos técnicos")} onClick={() => onMode("pro")}>Pro</button></div><button className="icon-control" onClick={() => onLocale(locale === "en" ? "es" : "en")} aria-label={t(locale, "Change language", "Cambiar idioma")}><Languages /><span>{locale.toUpperCase()}</span></button><button className={`icon-control ${calmMode ? "active" : ""}`} onClick={onCalm} aria-label={calmLabel} title={calmLabel} aria-pressed={calmMode}><MoonStar /><span>{calmLabel}</span></button></div></header>;
+  return <header className="gm-header"><button className="gm-brand" onClick={() => onNavigate("monad")} aria-label={t(locale, "Open Monad Pulse", "Abrir Pulso Monad")}><GhostGlyph /><span>GHOST MARKET<small>MONAD EDITION · BETA 0.1</small></span></button><nav aria-label={t(locale, "Main navigation", "Navegación principal")}>{NAV.map((item) => <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => onNavigate(item.id)}>{locale === "en" ? item.en : item.es}</button>)}</nav><div className="gm-tools"><div className="segmented" aria-label={t(locale, "Information depth", "Profundidad de información")}><button className={displayMode === "simple" ? "active" : ""} title={t(locale, "Guided essentials with all risks visible", "Esenciales guiados con todos los riesgos visibles")} onClick={() => onMode("simple")}>Simple</button><button className={displayMode === "pro" ? "active" : ""} title={t(locale, "Full evidence and technical metadata", "Evidencia completa y metadatos técnicos")} onClick={() => onMode("pro")}>Pro</button></div><button className="icon-control" onClick={() => onLocale(locale === "en" ? "es" : "en")} aria-label={t(locale, "Change language", "Cambiar idioma")}><Languages /><span>{locale.toUpperCase()}</span></button><button className={`icon-control ${calmMode ? "active" : ""}`} onClick={onCalm} aria-label={calmLabel} title={calmLabel} aria-pressed={calmMode}><MoonStar /><span>{calmLabel}</span></button></div></header>;
 }
 
 function ComprehensionProgress({ locale, section, liveStep, demoChapter }: { locale: Locale; section: Section; liveStep: number; demoChapter: number }) {
   const labels = locale === "en" ? ["Tonight", "Evidence", "Market", "Analysis", "Replay"] : ["Esta noche", "Evidencia", "Mercado", "Análisis", "Replay"];
-  const active = section === "home" ? 0 : section === "live" ? Math.min(3, liveStep) : section === "lens" || section === "guardian" || section === "pulse" ? 3 : section === "replay" || section === "judge" ? 4 : section === "demo" ? Math.min(4, 3 + Math.ceil((demoChapter + 1) / 8)) : 0;
+  const active = section === "home" ? 0 : section === "monad" ? 2 : section === "live" ? Math.min(3, liveStep) : section === "lens" || section === "guardian" || section === "pulse" ? 3 : section === "replay" || section === "judge" ? 4 : section === "demo" ? Math.min(4, 3 + Math.ceil((demoChapter + 1) / 8)) : 0;
   return <div className="journey-progress" aria-label={t(locale, "Understanding progress", "Progreso de comprensión")}><div className="journey-track"><span style={{ width: `${active / 4 * 100}%` }} /></div>{labels.map((label, index) => <div key={label} className={index <= active ? "reached" : ""}><i>{index < active ? <Check /> : index + 1}</i><span>{label}</span></div>)}</div>;
 }
 

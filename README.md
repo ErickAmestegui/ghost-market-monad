@@ -1,134 +1,29 @@
-# Ghost Market — BNB Hackathon Beta 0.9
+# Ghost Market — Monad Edition
 
-Ghost Market answers one question: **when Wall Street is closed, what does an independently verifiable blockchain market say a tokenized stock is worth?**
+Ghost Market: Monad Edition adds one narrow, real and reproducible Monad integration to the established Ghost Market interface. **Monad Network Pulse** reads Monad mainnet through JSON-RPC, shows verifiable blocks and transaction hashes, and derives a transparent short-window activity signal.
 
-It is market-intelligence software, not a trading app, price forecast or investment recommendation.
+This repository is read-only market-intelligence software. It does not connect a wallet, sign or submit transactions, execute trades, predict prices, or give financial advice.
 
-- [Public deployment](https://ghost-market-beta.lorgiogc.chatgpt.site/)
-- **[The Evidence Room — evaluate the core case in about 90 seconds](docs/JUDGE_QUICKSTART.md)**
-- [Official BNB Hack demo video](https://www.youtube.com/watch?v=puRMv_Wu2WA)
+## What is real and what is derived
 
-## Guided experience
-
-Beta 0.9 is organized as a calm, mobile-first learning journey instead of a dense terminal:
-
-- one primary action per step and a visible comprehension path;
-- plain-language evidence checks before technical detail;
-- Simple and Pro views backed by the same underlying data;
-- complete English and Spanish controls, plus Calm Mode and reduced-motion support;
-- a clearly gated deterministic demo with eight chapters, including Break the Consensus and The Morning After;
-- resilient `UNAVAILABLE` states when a live provider is incomplete or unreachable.
-- Ghost Guardian 2.0: a public, request-time, read-only investigation of the single verified PancakeSwap V2 AAPLon/USDT route for a bounded hypothetical input.
-- Ghost Investigation Receipt: canonical JSON with a reproducible SHA-256 integrity hash, downloadable or printable without a wallet.
-- an evidence-led homepage with immediate Guardian, Historical Replay and Judge Mode entry points;
-- Historical Replay of two authentic saved receipts, verified in-browser and compared without fabricating snapshots.
-
-## Ghost Guardian 2.0
-
-`Investigate Route` reads BNB Smart Chain at one block, verifies the AAPLon contract and PancakeSwap V2 pair through the factory, reads request-time reserves, and estimates constant-product execution impact with an explicit 0.25% fee assumption. Valid investigations return `REJECTED`, `INSUFFICIENT EVIDENCE`, or `CANDIDATE FOR FURTHER REVIEW`. Validation failures return `INVALID INPUT` before any blockchain investigation and keep contract, block and observation fields explicitly unverified.
-
-The public API is `POST /api/ghost-guardian` with JSON `{ "asset": "AAPLon", "amountUsdt": 6 }`. The amount is bounded to `0.1–25` USDT. A reusable client is packaged at `skills/ghost-guardian`; run `node skills/ghost-guardian/scripts/invoke.mjs --amount 6` from the repository root.
-
-The public runtime never requests a wallet and contains no trading, approval, signing, transfer or payment path. Unchecked DEX routes, an Agentic Wallet executable quote route, gas, transfer restrictions and independent reference-price freshness remain `NOT CHECKED`. The “Why this result?” explanation is a deterministic rendering of the verified dossier, explicitly not a simulated LLM call.
-
-Each completed investigation also returns a canonical receipt containing the route-scoped dossier, source/tool list, public parameters, algorithm version and limitations. Its SHA-256 hash detects changes to that JSON; it is not a signature, attestation or safe-to-trade claim. A BNB Agent Studio adapter and sanitized local model-to-tool evidence are documented in [Ghost Nightwatch evidence](docs/BNB_AGENT_STUDIO_NIGHTWATCH_EVIDENCE.md). The model harness remains `LOCAL VERIFIED / NOT PUBLICLY DEPLOYED`.
-
-## Why BNB Chain
-
-The selected xStocks exist as BEP-20 contracts on BNB Smart Chain, where contracts, pools, reserves and blocks can be inspected without trusting the interface. Ghost Market uses that transparency to separate four questions that dashboards often collapse into one:
-
-1. Does the contract exist?
-2. Does the official provider map this symbol to that contract?
-3. Is there a real on-chain market?
-4. Is that market liquid and fresh enough to use?
-
-## Product modes
-
-### LIVE EVIDENCE
-
-- Official xStocks Assets API for contract and issuer provenance.
-- xStocks trading-period metadata and provider-cached reference quote.
-- xStocks BSC oracle metadata.
-- BNB public JSON-RPC for bytecode, symbol, total supply and block proof.
-- PancakeSwap V2 factory/pair reads for real reserves, price, estimated liquidity and $100 price impact.
-- Binance Stocks Trading Market Data through a server-only API key.
-- Binance Web3 RWA Data API through a separate server-only API Key + Secret Key pair and HMAC-SHA256 signing.
-- Official Binance Wallet Skill `binance-tokenized-securities-info` v1.1 through public read-only endpoints; Ondo identity and multiplier data stay separate from xStocks.
-
-The primary LIVE AFTER-HOURS GAP remains blank unless the traditional market is outside regular hours, Binance returns a valid reference and an on-chain market passes liquidity/impact controls.
-
-### DETERMINISTIC DEMO
-
-Ghost Brain, Ghost Council, Ghost Score, Ghost Consensus, Market Constellation, Break the Consensus, scenarios, research, replay and The Morning After use versioned simulated fixtures. They demonstrate how the analysis behaves; they are not evidence of current or predictive market performance.
-
-## Status vocabulary
-
-| Status | Meaning |
-| --- | --- |
-| LIVE | Read during the request from a verifiable source |
-| CACHED | Real provider data without request-time freshness proof |
-| REJECTED | Real observation that failed market-quality controls |
-| INVALID INPUT | Request rejected before any blockchain investigation |
-| UNAVAILABLE | Required source, credential, pool or value is missing |
-| SIMULATED | Versioned deterministic fixture |
-| LOCAL VERIFIED | Reproduced in a private local lab; not evidence of public runtime behavior |
-| NOT DEPLOYED | Source or evidence exists locally or in Git, but is not running on the public Site |
-
-## Real integrations
-
-| Capability | Source | Current behavior |
+| Output | Classification | Meaning |
 | --- | --- | --- |
-| Contract provenance | xStocks public Assets API | Verifies provider, ISIN and BSC deployment |
-| Contract state | BNB public JSON-RPC | Reads code, symbol, supply, block and timestamp |
-| Oracle provenance | xStocks public Oracles API | Displays Chainlink pull-feed metadata when returned |
-| Reference quote | xStocks `price-data` | Labeled CACHED because the payload has no source timestamp |
-| DEX market | PancakeSwap V2 factory/pair | Accepts only with ≥$1,000 liquidity and ≤2% $100 impact |
-| Traditional quote | Binance Stocks Trading API | Authenticated HTTP 200 for AAPL, NVDA and TSLA; quote is CACHED because the payload has no source timestamp |
-| RWA search, token/reference price and market status | Binance Web3 RWA Data API | Signed request reaches Binance, but provider returns business code `40304`; status is ERROR, never simulated |
+| Network identity and chain ID | `LIVE` | Returned by `eth_chainId` and rejected unless it is Monad mainnet `143` |
+| Latest block number, hash and time | `LIVE` or `STALE` | Returned by Monad JSON-RPC; `STALE` means the newest returned block is more than 60 seconds old |
+| Transaction hashes and counts | `LIVE` or `STALE` | Read from actual sampled block payloads; linked to MonadVision |
+| Trend and density | `DERIVED` | Deterministic analysis of the latest 12 blocks, never presented as direct chain metadata |
+| Forecast, price, liquidity or trade quality | `NOT PROVIDED` | Transaction count cannot establish any of these properties |
 
-## Contracts
+The trend compares the recent six blocks with the preceding six. `RISING` or `COOLING` requires both a change of at least two transactions per block and at least 25%; otherwise it is `STEADY`. Density bands are descriptive and fixed: low `<10`, moderate `10–49.99`, high `≥50` transactions per block. These thresholds are product heuristics, not Monad protocol claims.
 
-- AAPLx: `0x9d275685dc284c8eb1c79f6aba7a63dc75ec890a`
-- NVDAx: `0xc845b2894dbddd03858fd2d643b4ef725fe0849d`
-- TSLAx: `0x8ad3c73f833d3f9a523ab01476625f269aeb7cf0`
-- Network: BNB Smart Chain mainnet, chain ID `56`
+## Vertical slice
 
-Runtime verification does not trust this list alone; the official xStocks registry must return the same BSC address and on-chain `symbol()` must match.
+- `GET /api/monad-pulse` performs two read-only RPC operations: chain/head discovery and one 12-block JSON-RPC batch.
+- The route validates chain ID, parses block evidence, returns up to five real transaction hashes, and never substitutes cached or simulated evidence when RPC fails.
+- `MonadNetworkPulse` is the initial screen and reuses the existing Ghost Market shell, navigation, responsive styles and companion artwork.
+- Pure signal logic is isolated and covered by Node tests.
 
-## Binance server configuration
-
-The integration uses the official documented `MARKET_DATA` endpoints:
-
-- `/sapi/v1/equity/market/tokenized-assets`
-- `/sapi/v1/equity/market/quote?symbol=<SYMBOL>`
-- `/sapi/v1/equity/market/exchangeInfo?symbol=<SYMBOL>`
-
-Set the API key only in the deployment environment:
-
-```dotenv
-BINANCE_API_KEY=
-BINANCE_WEB3_API_KEY=
-BINANCE_WEB3_SECRET_KEY=
-```
-
-The key is never returned to the browser. Missing credentials, invalid credentials, rate limits, timeout, unsupported asset, empty quote and upstream failures have explicit states.
-
-Copy `.env.example` to a local `.env` only for development. For the public Site, configure secrets in the Site runtime environment-variable settings and redeploy. `BINANCE_API_KEY` belongs to Stocks Trading; `BINANCE_WEB3_API_KEY` and `BINANCE_WEB3_SECRET_KEY` must be issued by the separate Binance Web3 Developer Portal. Never prefix any of them with `NEXT_PUBLIC_`.
-
-Verify Stocks Trading at `/api/binance-integration?symbol=AAPL`, signed Web3 RWA at `/api/binance-web3-rwa?symbol=AAPL`, and the public Wallet Skill adapter at `/api/binance-wallet-skill?symbol=AAPL`. See [Binance Web3 RWA technical evidence](docs/BINANCE_WEB3_RWA_TECHNICAL_EVIDENCE.md) and [Wallet Skill evidence](docs/BINANCE_WALLET_SKILL_EVIDENCE.md).
-
-| Safe state | Meaning |
-| --- | --- |
-| `MISSING_CREDENTIALS` | The server secret is absent; no upstream request is attempted |
-| `INVALID_CREDENTIALS` | Binance rejected the key |
-| `PROVIDER_BLOCKED` | Binance's network edge blocked one or more server hosts; official alternates are retried |
-| `RATE_LIMITED` | Binance returned a rate-limit response |
-| `TIMEOUT` | The seven-second request budget expired |
-| `ASSET_NOT_FOUND` | The requested/returned asset is unsupported or inconsistent |
-| `EMPTY_RESPONSE` | A mandatory quote body was empty |
-| `PROVIDER_ERROR` | The payload was malformed, mismatched or the provider failed |
-
-## Local verification
+## Run and verify
 
 Requires Node.js `>=22.13.0`.
 
@@ -140,56 +35,18 @@ npm run build
 npm run dev
 ```
 
-Recommended functional checks:
+Open `/api/monad-pulse` to inspect the evidence JSON. `MONAD_RPC_URL` is an optional server-only HTTPS override; when omitted, the route uses `https://rpc.monad.xyz`.
 
-1. Select AAPL, NVDA and TSLA in LIVE EVIDENCE.
-2. Confirm official registry, BscScan and block links change with the asset.
-3. Confirm weak/absent PancakeSwap markets are rejected, not scored as live prices.
-4. Confirm missing Binance credentials never become LIVE.
-5. Switch to DETERMINISTIC DEMO and test Simple/Pro, EN/ES, Research, scenarios, Break the Consensus, replay and The Morning After.
-6. Open Historical Replay and confirm `2 / 2 VERIFIED` plus `NO OBSERVED CHANGE`.
-7. Open The Evidence Room and follow the seven-step judge path.
-8. Test 320, 375, 390, 768 px and desktop without horizontal scroll.
+## Attribution and AI disclosure
 
-## Technical documentation
+The visual system, Ghost companion artwork, core application shell and pre-existing BNB Chain features were reused from [ErickAmestegui/ghost-market](https://github.com/ErickAmestegui/ghost-market), source commit `3a1d9d80e4e077db08f2337738a5b14f4dbeab0e`, under the repository's existing license. The original BNB repository was not modified; this is a separate working copy with its original remote removed.
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Contracts and provenance](docs/CONTRACTS.md)
-- [Judge integration evidence: Wallet Skill, Agentic Wallet, Ghost Guardian and BNB Agent Studio](docs/JUDGE_INTEGRATION_EVIDENCE.md)
-- [Ghost Guardian reproducible read-only scripts](scripts/ghost-guardian/README.md)
-- Developer Experience Report: submitted privately; no public report URL is claimed by the application
-- [License](LICENSE)
+OpenAI Codex was used to help implement Monad Network Pulse, its tests, interface integration and documentation. AI assistance is disclosed as development tooling, not as an on-chain agent, oracle, data source or verification authority. Runtime signals are produced by deterministic source code from RPC responses; no model generates live evidence.
 
-## Reproducible market audit
+## Scope and known gap
 
-Run `node scripts/audit-candidate-markets.mjs` to inspect official SPYx and QQQx BSC native/wrapper deployments against PancakeSwap V2 USDT and USDC. The script does not lower the production gates or mutate product configuration. At BSC block `126,528,816`, no candidate passed: the only discovered SPYx/USDC pair had approximately $0.00247 liquidity and 8,094,882.87% estimated impact for $100; QQQx returned no checked pair.
+This phase intentionally contains no deployment, wallet flow, payment, trading integration, new smart contract, demo video or broad redesign. The inherited BNB modules and their documentation remain in the tree for provenance, but Monad Network Pulse is the only new hackathon integration in this edition.
 
-## Hackathon verification checklist
+There is currently **no project-owned Monad contract address or transaction hash**. The integration proves live read access to Monad mainnet and real chain activity. If the hackathon requires a deployed contract or a transaction created by this project, that is a separate phase requiring explicit approval.
 
-- [x] LIVE EVIDENCE and DETERMINISTIC DEMO are visually and logically separate.
-- [x] AAPLx, NVDAx and TSLAx provenance is checked against the official xStocks registry.
-- [x] Contract bytecode, symbol and block evidence are read from BSC mainnet.
-- [x] Weak/absent PancakeSwap markets are rejected at fixed thresholds.
-- [x] Session status is normalized; the live gap is paused during `OPEN`.
-- [x] Wallet Lens supports a voluntary EIP-1193 connection or any BSC public address in read-only mode; it requests no signature, approval or transaction.
-- [x] BNB Agent Studio and Binance Agentic Wallet evidence is local-only; no autonomous agent is publicly deployed and no transaction was executed.
-- [x] Binance credentials remain server-only and failures are isolated.
-- [x] Authenticated Binance Stocks transport success — HTTP 200 verified for AAPL, NVDA and TSLA; price freshness remains CACHED.
-- [ ] Usable Binance Web3 response — signed requests currently return business code `40304`.
-- [ ] Accepted on-chain xStock market — none found in the audited V2 routes.
-- [x] Public repository URL — <https://github.com/ErickAmestegui/ghost-market>
-- [x] Official BNB Hack demo video — https://www.youtube.com/watch?v=puRMv_Wu2WA
-- [x] Anonymous public site access — explicitly authorized by the owner and published through Sites.
-
-## Current limitations
-
-- Production Binance credential names are configured as server-only Sites secrets; their values are hidden and never returned to the browser.
-- Binance Web3 currently returns HTTP 200 with business code `40304` (`Service not available due to compliance restriction`) for both RWA Platforms and Market Supported Chains. Ghost Market exposes this as an error and makes no LIVE claim.
-- The observed AAPLx and TSLAx PancakeSwap V2 pools are below the acceptance threshold; NVDAx has no verified V2 USDT pair. The live gap therefore remains incomplete.
-- Public Wallet Lens can connect to an EIP-1193 wallet or inspect a supplied BSC public address in read-only mode. It requests no signature, approval or transaction, and the inspected address does not need funds.
-- The Binance Agentic Wallet CLI and BNB Agent Studio harness were verified only in separate local labs. No autonomous agent, transaction flow, ERC-8004 identity or persistent agent is publicly deployed.
-- The GitHub repository is public at <https://github.com/ErickAmestegui/ghost-market>. Every future publication or deployment still requires a fresh secret review.
-
-## Safety
-
-Ghost Market does not execute trades or predict future prices. Scenario weights are analytical demo estimates, not forecasts or investment probabilities. Historical simulated nights are not proof of accuracy.
+See [Monad Network Pulse architecture](docs/MONAD_NETWORK_PULSE.md), the inherited [architecture document](docs/ARCHITECTURE.md), and [license](LICENSE).

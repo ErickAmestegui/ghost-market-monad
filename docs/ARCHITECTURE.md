@@ -1,5 +1,7 @@
 # Ghost Market architecture
 
+> **Monad Edition note:** the new, isolated Monad integration is documented in [MONAD_NETWORK_PULSE.md](MONAD_NETWORK_PULSE.md). The material below documents the inherited BNB Chain application and remains for attribution and provenance; it should not be read as a claim that those BNB features were migrated to Monad.
+
 ## Trust boundary
 
 Ghost Market runs two deliberately separate paths.
