@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Activity, Blocks, ExternalLink, Info, RadioTower, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { Locale } from "@/data/types";
+import { KuruFlowIntelligence } from "@/ui/kuru-flow-intelligence";
 
 type PulseResponse = {
   status: "LIVE" | "STALE" | "UNAVAILABLE";
@@ -129,5 +130,6 @@ export function MonadNetworkPulse({ locale }: { locale: Locale }) {
         {data.source && <a href={data.source.documentation} target="_blank" rel="noreferrer">{tx(locale, "Monad network documentation", "Documentación de la red Monad")} <ExternalLink /></a>}
       </details>
     </>}
+    <KuruFlowIntelligence locale={locale} />
   </section>;
 }

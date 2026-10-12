@@ -1,6 +1,6 @@
 # Ghost Market — Monad Edition
 
-Ghost Market: Monad Edition adds one narrow, real and reproducible Monad integration to the established Ghost Market interface. **Monad Network Pulse** reads Monad mainnet through JSON-RPC, shows verifiable blocks and transaction hashes, and derives a transparent short-window activity signal.
+Ghost Market: Monad Edition adds two real, reproducible Monad intelligence surfaces to the established Ghost Market interface. **Monad Network Pulse** reads mainnet blocks through JSON-RPC. **Kuru Flow Forensics** decodes real `Trade` events from Kuru's official MON/USDC order book and turns executed market flow into inspectable, non-prescriptive evidence.
 
 This repository is read-only market-intelligence software. It does not connect a wallet, sign or submit transactions, execute trades, predict prices, or give financial advice.
 
@@ -13,6 +13,8 @@ This repository is read-only market-intelligence software. It does not connect a
 | Transaction hashes and counts | `LIVE` or `STALE` | Read from actual sampled block payloads; linked to MonadVision |
 | Trend and density | `DERIVED` | Deterministic analysis of the latest 12 blocks, never presented as direct chain metadata |
 | Forecast, price, liquidity or trade quality | `NOT PROVIDED` | Transaction count cannot establish any of these properties |
+| Kuru MON/USDC trades | `LIVE` or `STALE` | Decoded from the official market contract's emitted `Trade` events |
+| VWAP, aggressor flow and review flags | `DERIVED` | Deterministic calculations over the disclosed block window and thresholds |
 
 The trend compares the recent six blocks with the preceding six. `RISING` or `COOLING` requires both a change of at least two transactions per block and at least 25%; otherwise it is `STEADY`. Density bands are descriptive and fixed: low `<10`, moderate `10–49.99`, high `≥50` transactions per block. These thresholds are product heuristics, not Monad protocol claims.
 
@@ -22,6 +24,8 @@ The trend compares the recent six blocks with the preceding six. `RISING` or `CO
 - The route validates chain ID, parses block evidence, returns up to five real transaction hashes, and never substitutes cached or simulated evidence when RPC fails.
 - `MonadNetworkPulse` is the initial screen and reuses the existing Ghost Market shell, navigation, responsive styles and companion artwork.
 - Pure signal logic is isolated and covered by Node tests.
+- `GET /api/kuru-flow` verifies Monad chain ID and deployed bytecode, scans the latest 720 blocks in RPC-safe 90-block windows, decodes up to 60 recent `Trade` events from the official Kuru MON/USDC market, and returns explorer-linked evidence.
+- Kuru flags are deliberately narrow: sparse sample, ≥70% one-sided aggressor flow, ≥50% volume concentration in one print, or ≥200 bps executed price range. They do not claim identity, intent, manipulation, safety or future returns.
 
 ## Run and verify
 
@@ -45,7 +49,7 @@ OpenAI Codex was used to help implement Monad Network Pulse, its tests, interfac
 
 ## Scope and known gap
 
-This phase intentionally contains no deployment, wallet flow, payment, trading integration, new smart contract, demo video or broad redesign. The inherited BNB modules and their documentation remain in the tree for provenance, but Monad Network Pulse is the only new hackathon integration in this edition.
+This phase intentionally contains no wallet flow, payment, trade execution, new smart contract, demo video or broad redesign. The inherited BNB modules and their documentation remain in the tree for provenance and are explicitly separate from the Monad market intelligence surfaces.
 
 There is currently **no project-owned Monad contract address or transaction hash**. The integration proves live read access to Monad mainnet and real chain activity. If the hackathon requires a deployed contract or a transaction created by this project, that is a separate phase requiring explicit approval.
 
