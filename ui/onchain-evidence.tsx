@@ -21,7 +21,7 @@ async function fetchJsonWithOneRetry<T>(url: string, signal: AbortSignal) {
   return retry.json() as Promise<T>;
 }
 
-export function useIntegrationEvidence(symbol: SymbolKey) {
+export function useIntegrationEvidence(symbol: SymbolKey, enabled = true) {
   const [evidence, setEvidence] = useState<BnbEvidence | null>(null);
   const [binance, setBinance] = useState<BinanceIntegration | null>(null);
   const [rwa, setRwa] = useState<BinanceWeb3RwaIntegration | null>(null);
@@ -78,13 +78,14 @@ export function useIntegrationEvidence(symbol: SymbolKey) {
   }, [symbol]);
   useEffect(() => {
     const gate = requestGate.current;
+    if (!enabled) return;
     const timer = window.setTimeout(() => { void load(); }, 0);
     return () => {
       window.clearTimeout(timer);
       activeController.current?.abort();
       gate.invalidate();
     };
-  }, [load]);
+  }, [load, enabled]);
   const current = loadedSymbol === symbol;
   return { evidence: current ? evidence : null, binance: current ? binance : null, rwa: current ? rwa : null, walletSkill: current ? walletSkill : null, live: current ? live : null, loading: loading || !current, reload: load };
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeInvestigationError } from "@/lib/monad/kuru-investigation";
 import {
   MONAD_CHAIN_ID,
   MONAD_EXPLORER_URL,
@@ -121,7 +122,7 @@ export async function GET() {
       observedAt,
       mode: "READ_ONLY",
       network: { name: MONAD_NETWORK_NAME, chainId: MONAD_CHAIN_ID, nativeCurrency: "MON", explorer: MONAD_EXPLORER_URL },
-      error: error instanceof Error ? error.message : "Monad RPC evidence is unavailable",
+      error: safeInvestigationError(error),
       transactionsSubmitted: 0,
       warnings: ["No cached or simulated fallback was substituted for live Monad data."],
     }, { status: 503, headers: { ...headers, "cache-control": "no-store" } });

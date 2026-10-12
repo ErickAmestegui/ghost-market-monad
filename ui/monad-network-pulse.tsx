@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Activity, Blocks, ChevronDown, ExternalLink, Info, RadioTower, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { Locale } from "@/data/types";
-import { KuruFlowIntelligence } from "@/ui/kuru-flow-intelligence";
+
 
 type PulseResponse = {
   status: "LIVE" | "STALE" | "UNAVAILABLE";
@@ -62,8 +62,8 @@ export function MonadNetworkPulse({ locale }: { locale: Locale }) {
   }, [refreshToken]);
 
   const status = loading ? "LOADING" : data?.status ?? "UNAVAILABLE";
-  return <section className="page-shell monad-markets-page">
-    <KuruFlowIntelligence locale={locale} />
+  return <section className="network-context">
+
 
     <details className="monad-pulse-secondary">
       <summary>

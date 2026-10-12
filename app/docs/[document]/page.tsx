@@ -7,7 +7,11 @@ import contracts from "../../../docs/CONTRACTS.md?raw";
 import technicalEvidence from "../../../docs/BINANCE_WEB3_RWA_TECHNICAL_EVIDENCE.md?raw";
 import walletSkillEvidence from "../../../docs/BINANCE_WALLET_SKILL_EVIDENCE.md?raw";
 
+import envio from "../../../docs/ENVIO_EVALUATION.md?raw";
+
+
 const DOCUMENTS = {
+  envio: { title: "Envio evaluation", source: envio },
   readme: { title: "README", source: readme },
   architecture: { title: "Architecture", source: architecture },
   contracts: { title: "Contracts & provenance", source: contracts },

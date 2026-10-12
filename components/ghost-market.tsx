@@ -26,9 +26,9 @@ import { GhostGuardian } from "@/ui/ghost-guardian";
 import { HomeExperience } from "@/ui/home-experience";
 import { HistoricalReplay } from "@/ui/historical-replay";
 import { EvidenceRoom } from "@/ui/evidence-room";
-import { MonadNetworkPulse } from "@/ui/monad-network-pulse";
+import { KuruFlowIntelligence, type InvestigationView } from "@/ui/kuru-flow-intelligence";
 
-type Section = "home" | "monad" | "live" | "lens" | "guardian" | "pulse" | "replay" | "judge" | "demo" | "learn" | "about";
+type Section = "home" | "historical" | "explorer" | "legacy-home" | "monad" | "live" | "lens" | "guardian" | "pulse" | "replay" | "judge" | "demo" | "learn" | "about";
 type DisplayMode = "simple" | "pro";
 type DemoPanel = "brain" | "council" | "scenarios" | "research" | "pulse";
 type DataState = "LIVE" | "CACHED" | "REJECTED" | "UNAVAILABLE" | "ERROR" | "SIMULATED" | "DEMO" | "LOADING";
@@ -40,8 +40,11 @@ const ASSETS: Array<{ symbol: SymbolKey; token: string; company: string; note: {
 ];
 
 const NAV: Array<{ id: Section; icon: typeof Home; en: string; es: string }> = [
-  { id: "home", icon: Home, en: "Home", es: "Inicio" },
-  { id: "monad", icon: RadioTower, en: "Monad Markets", es: "Mercados Monad" },
+  { id: "home", icon: Home, en: "Overview", es: "Portada" },
+  { id: "historical", icon: RefreshCw, en: "Historical Replay", es: "Replay histórico" },
+  { id: "explorer", icon: Search, en: "Evidence Explorer", es: "Explorador de evidencia" },
+  { id: "legacy-home", icon: Home, en: "BNB Home", es: "Inicio BNB" },
+  { id: "monad", icon: RadioTower, en: "Live Investigation", es: "Investigación en vivo" },
   { id: "live", icon: ShieldCheck, en: "Live Evidence", es: "Evidencia" },
   { id: "lens", icon: Radar, en: "Wallet Lens", es: "Wallet Lens" },
   { id: "guardian", icon: ShieldCheck, en: "Guardian", es: "Guardian" },
@@ -53,8 +56,8 @@ const NAV: Array<{ id: Section; icon: typeof Home; en: string; es: string }> = [
   { id: "about", icon: Info, en: "About", es: "Acerca de" },
 ];
 
-const PRIMARY_NAV: Section[] = ["home", "monad", "live", "guardian", "replay", "judge"];
-const SECONDARY_NAV: Section[] = ["lens", "pulse", "demo", "learn", "about"];
+const PRIMARY_NAV: Section[] = ["home", "monad", "historical", "explorer"];
+const SECONDARY_NAV: Section[] = ["legacy-home", "live", "guardian", "replay", "judge", "lens", "pulse", "demo", "learn", "about"];
 
 const t = (locale: Locale, en: string, es: string) => locale === "en" ? en : es;
 const money = (value: number | null | undefined, digits = 2) => value == null ? "Not available" : `$${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
@@ -62,7 +65,8 @@ const percent = (value: number | null | undefined) => value == null ? "Not avail
 const dateTime = (value: string | null | undefined, locale: Locale) => value ? new Date(value).toLocaleString(locale === "en" ? "en-US" : "es-BO", { dateStyle: "medium", timeStyle: "short" }) : t(locale, "Not supplied", "No proporcionado");
 
 export default function GhostMarket() {
-  const [section, setSection] = useState<Section>("monad");
+  const [hydrated, setHydrated] = useState(false);
+  const [section, setSection] = useState<Section>("home");
   const [liveStep, setLiveStep] = useState(0);
   const [symbol, setSymbol] = useState<SymbolKey>("AAPL");
   const [locale, setLocale] = useState<Locale>("en");
@@ -73,7 +77,8 @@ export default function GhostMarket() {
   const [demoPanel, setDemoPanel] = useState<DemoPanel>("brain");
   const [breakPhase, setBreakPhase] = useState(0);
   const breakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { evidence, binance, rwa, walletSkill, live, loading, reload } = useIntegrationEvidence(symbol);
+  const monadSection = PRIMARY_NAV.includes(section);
+  const { evidence, binance, rwa, walletSkill, live, loading, reload } = useIntegrationEvidence(symbol, !monadSection);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -83,6 +88,7 @@ export default function GhostMarket() {
       if (storedLocale === "en" || storedLocale === "es") setLocale(storedLocale);
       if (storedMode === "simple" || storedMode === "pro") setDisplayMode(storedMode);
       if (storedCalm === "true" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) setCalmMode(true);
+      setHydrated(true);
     });
     return () => window.cancelAnimationFrame(frameId);
   }, []);
@@ -96,13 +102,13 @@ export default function GhostMarket() {
   const chooseAsset = (next: SymbolKey) => { setSymbol(next); setLiveStep(1); };
   const startDemo = () => { setDemoConsent(false); setDemoChapter(0); setBreakPhase(0); navigate("demo"); };
 
-  return <main className="gm-app" data-calm={calmMode} data-display={displayMode}>
+  return <main className="gm-app" data-hydrated={hydrated} data-calm={calmMode} data-display={displayMode}>
     <Header section={section} locale={locale} displayMode={displayMode} calmMode={calmMode} onNavigate={navigate} onLocale={changeLocale} onMode={changeMode} onCalm={changeCalm} />
-    {section !== "monad" && <ComprehensionProgress locale={locale} section={section} liveStep={liveStep} demoChapter={demoChapter} />}
-    <div className="mode-brief" role="status"><SlidersHorizontal /><span>{displayMode === "simple" ? t(locale, "SIMPLE · Guided essentials; every risk remains visible", "SIMPLE · Esenciales guiados; todos los riesgos siguen visibles") : t(locale, "PRO · Full sources, request IDs and quality gates", "PRO · Fuentes, request IDs y controles de calidad completos")}</span></div>
-    <div className={`chain-scope ${section === "monad" ? "monad" : "legacy"}`}><RadioTower /><span>{section === "monad" ? t(locale, "MONAD MAINNET · LIVE MARKET DATA", "MONAD MAINNET · DATOS DE MERCADO LIVE") : t(locale, "INHERITED BNB MODULE · SEPARATE DATA SCOPE", "MÓDULO BNB HEREDADO · DATOS SEPARADOS")}</span></div>
-    {section === "home" && <HomeExperience locale={locale} onInvestigate={() => navigate("guardian")} onReplay={() => navigate("replay")} onJudge={() => navigate("judge")} />}
-    {section === "monad" && <MonadNetworkPulse locale={locale} />}
+    {!monadSection && <ComprehensionProgress locale={locale} section={section} liveStep={liveStep} demoChapter={demoChapter} />}
+    {!monadSection && <div className="mode-brief" role="status"><SlidersHorizontal /><span>{displayMode === "simple" ? t(locale, "SIMPLE · Guided essentials; every risk remains visible", "SIMPLE · Esenciales guiados; todos los riesgos siguen visibles") : t(locale, "PRO · Full sources, request IDs and quality gates", "PRO · Fuentes, request IDs y controles de calidad completos")}</span></div>}
+    <div className={`chain-scope ${monadSection ? "monad" : "legacy"}`}><RadioTower /><span>{monadSection ? t(locale, "MONAD MAINNET · VERIFIED EVENT RESEARCH", "MONAD MAINNET · INVESTIGACIÓN DE EVENTOS") : t(locale, "INHERITED BNB MODULE · SEPARATE DATA SCOPE", "MÓDULO BNB HEREDADO · DATOS SEPARADOS")}</span></div>
+    {section === "legacy-home" && <HomeExperience locale={locale} onInvestigate={() => navigate("guardian")} onReplay={() => navigate("replay")} onJudge={() => navigate("judge")} />}
+    {monadSection && <ModuleErrorBoundary resetKey={section} fallback={<div className="research-state" role="alert">{t(locale, "This research view could not render. Open another section and retry.", "No se pudo mostrar esta vista. Abre otra sección y reintenta.")}</div>}><KuruFlowIntelligence locale={locale} view={section === "monad" ? "live" : section as InvestigationView} onNavigate={(next) => navigate(next === "live" ? "monad" : next)} /></ModuleErrorBoundary>}
     {section === "live" && <LiveJourney locale={locale} displayMode={displayMode} step={liveStep} symbol={symbol} loading={loading} evidence={evidence} binance={binance} rwa={rwa} walletSkill={walletSkill} live={live} onStep={setLiveStep} onSelect={chooseAsset} onReload={reload} onDemo={startDemo} />}
     {section === "lens" && <WalletLens locale={locale} onInvestigate={() => { setLiveStep(1); navigate("live"); }} />}
     {section === "guardian" && <GhostGuardian locale={locale} displayMode={displayMode} />}
@@ -121,7 +127,7 @@ function Header({ section, locale, displayMode, calmMode, onNavigate, onLocale, 
   const calmLabel = calmMode ? t(locale, "Calm · motion reduced", "Calma · movimiento reducido") : t(locale, "Calm", "Calma");
   const item = (id: Section) => NAV.find((entry) => entry.id === id)!;
   const secondaryActive = SECONDARY_NAV.includes(section);
-  return <header className="gm-header"><button className="gm-brand" onClick={() => onNavigate("monad")} aria-label={t(locale, "Open Monad Markets", "Abrir Mercados Monad")}><GhostGlyph /><span>GHOST MARKET<small>MONAD EDITION · MARKET INTELLIGENCE</small></span></button><nav aria-label={t(locale, "Main navigation", "Navegación principal")}>{PRIMARY_NAV.map((id) => { const entry = item(id); return <button key={id} className={section === id ? "active" : ""} onClick={() => onNavigate(id)}>{locale === "en" ? entry.en : entry.es}</button>; })}<details className={`nav-more ${secondaryActive ? "active" : ""}`}><summary>{t(locale, "More", "Más")}<ChevronDown /></summary><div>{SECONDARY_NAV.map((id) => { const entry = item(id); return <button key={id} className={section === id ? "active" : ""} onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); onNavigate(id); }}>{locale === "en" ? entry.en : entry.es}</button>; })}</div></details></nav><div className="gm-tools"><div className="segmented" aria-label={t(locale, "Information depth", "Profundidad de información")}><button className={displayMode === "simple" ? "active" : ""} title={t(locale, "Guided essentials with all risks visible", "Esenciales guiados con todos los riesgos visibles")} onClick={() => onMode("simple")}>Simple</button><button className={displayMode === "pro" ? "active" : ""} title={t(locale, "Full evidence and technical metadata", "Evidencia completa y metadatos técnicos")} onClick={() => onMode("pro")}>Pro</button></div><button className="icon-control" onClick={() => onLocale(locale === "en" ? "es" : "en")} aria-label={t(locale, "Change language", "Cambiar idioma")}><Languages /><span>{locale.toUpperCase()}</span></button><button className={`icon-control ${calmMode ? "active" : ""}`} onClick={onCalm} aria-label={calmLabel} title={calmLabel} aria-pressed={calmMode}><MoonStar /><span>{calmLabel}</span></button></div></header>;
+  return <header className="gm-header"><button className="gm-brand" onClick={() => onNavigate("home")} aria-label={t(locale, "Open Monad Markets", "Abrir Mercados Monad")}><GhostGlyph /><span>GHOST MARKET<small>MONAD EDITION · MARKET INTELLIGENCE</small></span></button><nav aria-label={t(locale, "Main navigation", "Navegación principal")}>{PRIMARY_NAV.map((id) => { const entry = item(id); return <button key={id} className={section === id ? "active" : ""} onClick={() => onNavigate(id)}>{locale === "en" ? entry.en : entry.es}</button>; })}<details className={`nav-more ${secondaryActive ? "active" : ""}`}><summary>{t(locale, "BNB legacy & more", "Legado BNB y más")}<ChevronDown /></summary><div>{SECONDARY_NAV.map((id) => { const entry = item(id); return <button key={id} className={section === id ? "active" : ""} onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); onNavigate(id); }}>{locale === "en" ? entry.en : entry.es}</button>; })}</div></details></nav><div className="gm-tools">{!PRIMARY_NAV.includes(section) && <div className="segmented" aria-label={t(locale, "Information depth", "Profundidad de información")}><button className={displayMode === "simple" ? "active" : ""} title={t(locale, "Guided essentials with all risks visible", "Esenciales guiados con todos los riesgos visibles")} onClick={() => onMode("simple")}>Simple</button><button className={displayMode === "pro" ? "active" : ""} title={t(locale, "Full evidence and technical metadata", "Evidencia completa y metadatos técnicos")} onClick={() => onMode("pro")}>Pro</button></div>}<button className="icon-control" onClick={() => onLocale(locale === "en" ? "es" : "en")} aria-label={t(locale, "Change language", "Cambiar idioma")}><Languages /><span>{locale.toUpperCase()}</span></button><button className={`icon-control ${calmMode ? "active" : ""}`} onClick={onCalm} aria-label={calmLabel} title={calmLabel} aria-pressed={calmMode}><MoonStar /><span>{calmLabel}</span></button></div></header>;
 }
 
 function ComprehensionProgress({ locale, section, liveStep, demoChapter }: { locale: Locale; section: Section; liveStep: number; demoChapter: number }) {
@@ -299,5 +305,5 @@ function ScoreLesson({ name, copy }: { name: string; copy: string }) { return <d
 function JudgeCard({ title, text }: { title: string; text: string }) { return <article><span>{title}</span><p>{text}</p></article>; }
 function GhostGlyph() { return <span className="ghost-glyph" aria-hidden="true"><i /><i /></span>; }
 function StateIcon({ status }: { status: DataState }) { if (status === "LIVE" || status === "CACHED") return <CheckCircle2 className="state-icon" />; if (status === "REJECTED") return <TriangleAlert className="state-icon" />; if (status === "ERROR") return <CircleX className="state-icon" />; return <CircleDashed className="state-icon" />; }
-function MobileNav({ section, locale, onNavigate }: { section: Section; locale: Locale; onNavigate: (section: Section) => void }) { return <nav className="mobile-bottom-nav" aria-label={t(locale, "Mobile navigation", "Navegación móvil")}>{NAV.map((item) => { const Icon = item.icon; return <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => onNavigate(item.id)}><Icon /><span>{locale === "en" ? item.en : item.es}</span></button>; })}</nav>; }
+function MobileNav({ section, locale, onNavigate }: { section: Section; locale: Locale; onNavigate: (section: Section) => void }) { return <nav className="mobile-bottom-nav" aria-label={t(locale, "Mobile navigation", "Navegación móvil")}>{PRIMARY_NAV.map(id => NAV.find(item => item.id === id)!).map((item) => { const Icon = item.icon; return <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => onNavigate(item.id)}><Icon /><span>{locale === "en" ? item.en : item.es}</span></button>; })}<details className="mobile-legacy-menu"><summary><ChevronDown /><span>{t(locale, "More", "Más")}</span></summary><div><strong>{t(locale, "BNB legacy · separate scope", "Legado BNB · ámbito separado")}</strong>{NAV.filter(item => SECONDARY_NAV.includes(item.id)).map(item => <button key={item.id} onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onNavigate(item.id); }}>{locale === "en" ? item.en : item.es}</button>)}</div></details></nav>; }
 function chapterCopy(locale: Locale, chapter: number) { const en = ["The traditional reference stops updating.", "Three simulated venues remain active.", "Their prices begin to separate from the frozen reference.", "Ghost compares agreement, freshness, spread and liquidity.", "A controlled weak-market price tests the engine.", "Quality penalties lower the outlier’s influence.", "The next simulated traditional reference arrives.", "Ghost separates what worked from what remained unknown."]; const es = ["La referencia tradicional deja de actualizarse.", "Tres venues simulados permanecen activos.", "Sus precios comienzan a separarse de la referencia congelada.", "Ghost compara acuerdo, frescura, spread y liquidez.", "Un precio controlado de mercado débil pone a prueba el motor.", "Las penalizaciones de calidad reducen la influencia del outlier.", "Llega la siguiente referencia tradicional simulada.", "Ghost separa lo que funcionó de lo que quedó sin respuesta."]; return (locale === "en" ? en : es)[chapter]; }

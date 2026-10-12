@@ -1,56 +1,69 @@
-# Ghost Market — Monad Edition
+# Ghost Market: Monad Edition
 
-Ghost Market: Monad Edition adds two real, reproducible Monad intelligence surfaces to the established Ghost Market interface. **Monad Network Pulse** reads mainnet blocks through JSON-RPC. **Kuru Flow Forensics** decodes real `Trade` events from Kuru's official MON/USDC order book and turns executed market flow into inspectable, non-prescriptive evidence.
+Investigate real Kuru MON/USDC fills on Monad mainnet (chain ID 143). The main product has four bilingual views: Overview, Live Investigation, Historical Replay and Evidence Explorer. Ghost's visual identity, companion and inherited modules are retained. BNB modules are accessible under **BNB legacy & more** and do not load their providers while a Monad view is active.
 
-This repository is read-only market-intelligence software. It does not connect a wallet, sign or submit transactions, execute trades, predict prices, or give financial advice.
+## Investigate and reproduce
 
-## What is real and what is derived
+1. Open Historical Replay and choose **Investigate block 112682099** with Monad RPC.
+2. Select either returned event. Inspect block/hash, log index, maker, taker, txOrigin, price, size, remaining order size and transaction explorer links.
+3. Export the evidence JSON. RPC evidence includes the raw ABI data and event topic.
+4. Keep this result as historical A, query another range and compare A/B; or capture a LIVE baseline for LIVE/HISTORICAL comparison.
+5. Evidence Explorer filters the captured results by side, block, transaction hash or participant address. Filters do not change the metrics.
 
-| Output | Classification | Meaning |
-| --- | --- | --- |
-| Network identity and chain ID | `LIVE` | Returned by `eth_chainId` and rejected unless it is Monad mainnet `143` |
-| Latest block number, hash and time | `LIVE` or `STALE` | Returned by Monad JSON-RPC; `STALE` means the newest returned block is more than 60 seconds old |
-| Transaction hashes and counts | `LIVE` or `STALE` | Read from actual sampled block payloads; linked to MonadVision |
-| Trend and density | `DERIVED` | Deterministic analysis of the latest 12 blocks, never presented as direct chain metadata |
-| Forecast, price, liquidity or trade quality | `NOT PROVIDED` | Transaction count cannot establish any of these properties |
-| Kuru MON/USDC trades | `LIVE` or `STALE` | Decoded from the official market contract's emitted `Trade` events |
-| VWAP, aggressor flow and review flags | `DERIVED` | Deterministic calculations over the disclosed block window and thresholds |
+The preset is an on-demand historical query, not a simulation or bundled fixture. Two real Trade events were returned by the public RPC during local verification on 2026-10-12. This observation is not a promise of provider availability.
 
-The trend compares the recent six blocks with the preceding six. `RISING` or `COOLING` requires both a change of at least two transactions per block and at least 25%; otherwise it is `STEADY`. Density bands are descriptive and fixed: low `<10`, moderate `10–49.99`, high `≥50` transactions per block. These thresholds are product heuristics, not Monad protocol claims.
+## Evidence and inference
 
-## Vertical slice
+| Output | Source and scope |
+| --- | --- |
+| Kuru events and participants | Official market `0x065C9d28E428A0db40191a54d33d5b7c71a9C394`, official non-indexed Trade ABI |
+| LIVE | Latest 720 blocks, read through eight RPC windows of at most 90 blocks; STALE if head age exceeds 60 seconds at capture |
+| Historical RPC | Inclusive caller-selected range of at most 720 blocks, independent of LIVE availability |
+| Historical Envio | Explicit separate path of at most 10,000 blocks; requires server API token |
+| Event sample | At most the newest 60 events; analysis uses the exact same returned sample. Decoded/returned counts and truncation are disclosed |
+| Prices and notional | USDC per MON / USDC, not a verified USD valuation. Legacy JSON field names `priceUsd`, `notionalUsd`, `vwapUsd` are retained for compatibility and denote USDC in this market |
+| Interpretation | Deterministic calculations and disclosed rules, not generative AI |
+| Comparison | Counts, MON per block, VWAP change and imbalance percentage-point difference. Withheld for capped windows; absent VWAP remains null |
+| Network Pulse | Read-only sample of 12 real Monad blocks, retained below Live Investigation |
 
-- `GET /api/monad-pulse` performs two read-only RPC operations: chain/head discovery and one 12-block JSON-RPC batch.
-- The route validates chain ID, parses block evidence, returns up to five real transaction hashes, and never substitutes cached or simulated evidence when RPC fails.
-- `MonadNetworkPulse` is the initial screen and reuses the existing Ghost Market shell, navigation, responsive styles and companion artwork.
-- Pure signal logic is isolated and covered by Node tests.
-- `GET /api/kuru-flow` verifies Monad chain ID and deployed bytecode, scans the latest 720 blocks in RPC-safe 90-block windows, decodes up to 60 recent `Trade` events from the official Kuru MON/USDC market, and returns explorer-linked evidence.
-- Kuru flags are deliberately narrow: sparse sample, ≥70% one-sided aggressor flow, ≥50% volume concentration in one print, or ≥200 bps executed price range. They do not claim identity, intent, manipulation, safety or future returns.
+Direction is withheld below five events. Descriptive direction bands use ±25% imbalance. Review flags require ≥70% absolute imbalance with ≥5 events, ≥50% single-event volume share with ≥3 events, or ≥200 bps price range with ≥5 events. UI references lead to contributing events. Addresses do not establish identity, beneficial ownership, intent, manipulation, safety or profitability.
 
-## Run and verify
+Provider hashes are preserved; this app does not independently establish canonical membership or finality. LIVE is a captured request-time window, not an automatically updating stream. Empty windows are successful results. There is no synthetic production fallback.
 
-Requires Node.js `>=22.13.0`.
+## Providers and configuration
+
+- `GET /api/kuru-flow`: live read-only Monad JSON-RPC.
+- `GET /api/kuru-history?fromBlock=112682099&toBlock=112682099`: historical RPC.
+- `GET /api/kuru-replay?fromBlock=<n>&toBlock=<n>`: Envio HyperSync, no RPC fallback.
+- `GET /api/monad-pulse`: network context.
+
+`MONAD_RPC_URL` optionally overrides `https://rpc.monad.xyz`, server-side HTTPS only. `ENVIO_API_TOKEN` is server-only and is sent solely to the fixed `https://monad.hypersync.xyz/query` endpoint. Missing token returns CONFIG_REQUIRED; provider errors are sanitized and never reflect credential URLs. Requests have overall deadlines and bounded pagination/results.
+
+Envio's official documentation lists chain ID 143 for HyperSync and HyperRPC. Local unauthenticated probes found `/height` available and `/chain_id` unauthorized (401). Authenticated historical queries have **not** been verified in this checkout. The adapter has pagination/hash-join/error tests, but no bounty eligibility or completed Envio delivery is claimed. RPC remains the proven default. See [Envio evaluation](docs/ENVIO_EVALUATION.md).
+
+No runtime generative AI provider or authorized Nansen integration is configured; neither is claimed.
+
+## Local verification
+
+Requires Node ≥22.13.0 and npm 11.13.x (the package manager pin is `npm@11.13.0`). `package-lock.json` is the canonical lockfile; pnpm is not the supported installation path. Install from a clean checkout with:
 
 ```bash
 npm run install:ci
 npm test
 npm run lint
+npm run typecheck
 npm run build
 npm run dev
 ```
 
-Open `/api/monad-pulse` to inspect the evidence JSON. `MONAD_RPC_URL` is an optional server-only HTTPS override; when omitted, the route uses `https://rpc.monad.xyz`.
+A clean `npm run install:ci` was verified with no existing `node_modules` and a new empty cache on Windows (Node 24.16.0, npm 11.13.0). The new lockfile pins registry tarballs and integrity hashes. Next’s required PostCSS 8.5.23 is available and remains unchanged. TypeScript-ESLint is pinned to the previously used 8.71.0 because an attempted 8.71.2 download returned HTTP 404 during verification. Do not bypass the lock with `npm install` in CI. Re-run `npm run install:ci` after intentional lockfile changes. Linux/Cloudflare execution has not been validated in this local Windows session.
+
+Browser regression script: `scripts/verify-monad-ui.mjs` (requires Playwright; `PLAYWRIGHT_PACKAGE_PATH` can point to an installed package). Runs against `GHOST_TEST_URL` or `http://127.0.0.1:5173`. Test-only failures/slow responses are intercepted within the test browser, never in application code.
 
 ## Attribution and AI disclosure
 
-The visual system, Ghost companion artwork, core application shell and pre-existing BNB Chain features were reused from [ErickAmestegui/ghost-market](https://github.com/ErickAmestegui/ghost-market), source commit `3a1d9d80e4e077db08f2337738a5b14f4dbeab0e`, under the repository's existing license. The original BNB repository was not modified; this is a separate working copy with its original remote removed.
+Ghost's visual system, companion artwork, core shell and inherited BNB features originate from [ErickAmestegui/ghost-market](https://github.com/ErickAmestegui/ghost-market), source commit `3a1d9d80e4e077db08f2337738a5b14f4dbeab0e`, under the existing [LICENSE](LICENSE). Work in this session was exclusively in the separate local `ghost-market-monad` checkout. The original repository was not modified.
 
-OpenAI Codex was used to help implement Monad Network Pulse, its tests, interface integration and documentation. AI assistance is disclosed as development tooling, not as an on-chain agent, oracle, data source or verification authority. Runtime signals are produced by deterministic source code from RPC responses; no model generates live evidence.
+OpenAI Codex assisted with implementation, tests, UX and documentation. Runtime explanations are deterministic code; the assistant is not an oracle, evidence source, generative intelligence integration or onchain agent.
 
-## Scope and known gap
-
-This phase intentionally contains no wallet flow, payment, trade execution, new smart contract, demo video or broad redesign. The inherited BNB modules and their documentation remain in the tree for provenance and are explicitly separate from the Monad market intelligence surfaces.
-
-There is currently **no project-owned Monad contract address or transaction hash**. The integration proves live read access to Monad mainnet and real chain activity. If the hackathon requires a deployed contract or a transaction created by this project, that is a separate phase requiring explicit approval.
-
-See [Monad Network Pulse architecture](docs/MONAD_NETWORK_PULSE.md), the inherited [architecture document](docs/ARCHITECTURE.md), and [license](LICENSE).
+No wallets, signatures, swaps, contract deployment or trade execution were added. No recording, pitch or application submission is included. No project-owned Monad contract or project-submitted transaction is claimed. The repository's inherited reports, videos, screenshots and BNB documentation are prior artifacts, not proof of this Monad implementation or a new submission.

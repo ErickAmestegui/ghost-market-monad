@@ -30,7 +30,8 @@
     "types": [
       "node",
       "@cloudflare/workers-types"
-    ]
+    ],
+    "allowImportingTsExtensions": true
   },
   "include": [
     "next-env.d.ts",
@@ -44,6 +45,10 @@
     "node_modules",
     "examples",
     "build",
-    "tests"
+    "tests",
+    "work",
+    ".sites-runtime",
+    ".wrangler",
+    "dist"
   ]
 }
