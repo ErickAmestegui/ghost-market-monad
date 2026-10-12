@@ -8,10 +8,12 @@ import technicalEvidence from "../../../docs/BINANCE_WEB3_RWA_TECHNICAL_EVIDENCE
 import walletSkillEvidence from "../../../docs/BINANCE_WALLET_SKILL_EVIDENCE.md?raw";
 
 import envio from "../../../docs/ENVIO_EVALUATION.md?raw";
+import grandChampion from "../../../docs/GRAND_CHAMPION_READINESS.md?raw";
 import championship from "../../../docs/CHAMPIONSHIP_READINESS.md?raw";
 
 
 const DOCUMENTS = {
+  "grand-champion": {title: "Grand Champion final sprint", source: grandChampion},
   championship: { title: "Championship readiness", source: championship },
   envio: { title: "Envio evaluation", source: envio },
   readme: { title: "README", source: readme },

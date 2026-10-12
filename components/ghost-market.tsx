@@ -28,7 +28,7 @@ import { HistoricalReplay } from "@/ui/historical-replay";
 import { EvidenceRoom } from "@/ui/evidence-room";
 import { KuruFlowIntelligence, type InvestigationView } from "@/ui/kuru-flow-intelligence";
 
-type Section = "home" | "radar" | "perpl" | "historical" | "explorer" | "legacy-home" | "monad" | "live" | "lens" | "guardian" | "pulse" | "replay" | "judge" | "demo" | "learn" | "about";
+type Section = "investigation" | "home" | "radar" | "perpl" | "historical" | "explorer" | "legacy-home" | "monad" | "live" | "lens" | "guardian" | "pulse" | "replay" | "judge" | "demo" | "learn" | "about";
 type DisplayMode = "simple" | "pro";
 type DemoPanel = "brain" | "council" | "scenarios" | "research" | "pulse";
 type DataState = "LIVE" | "CACHED" | "REJECTED" | "UNAVAILABLE" | "ERROR" | "SIMULATED" | "DEMO" | "LOADING";
@@ -79,7 +79,7 @@ export default function GhostMarket() {
   const [demoPanel, setDemoPanel] = useState<DemoPanel>("brain");
   const [breakPhase, setBreakPhase] = useState(0);
   const breakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const monadSection = PRIMARY_NAV.includes(section);
+  const monadSection = PRIMARY_NAV.includes(section) || section === "investigation";
   const { evidence, binance, rwa, walletSkill, live, loading, reload } = useIntegrationEvidence(symbol, !monadSection);
 
   useEffect(() => {
@@ -91,6 +91,7 @@ export default function GhostMarket() {
       if (storedMode === "simple" || storedMode === "pro") setDisplayMode(storedMode);
       if (storedCalm === "true" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) setCalmMode(true);
       if (new URLSearchParams(window.location.search).get("view") === "historical") setSection("historical");
+      if (new URLSearchParams(window.location.search).get("view") === "investigation") setSection("investigation");
       setHydrated(true);
     });
     return () => window.cancelAnimationFrame(frameId);
@@ -122,7 +123,7 @@ export default function GhostMarket() {
     {section === "learn" && <Learn locale={locale} />}
     {section === "about" && <About locale={locale} binance={binance} rwa={rwa} />}
     <MobileNav section={section} locale={locale} onNavigate={navigate} />
-    <footer className="gm-footer"><div><GhostGlyph /><span>Ghost Market · Monad Edition</span></div><p>{t(locale, "Evidence and education, never financial advice.", "Evidencia y educación, nunca asesoramiento financiero.")}</p><a href="/docs">{t(locale, "Technical documentation", "Documentación técnica")} <ExternalLink /></a></footer>
+    <footer className="gm-footer"><div><GhostGlyph /><span>Ghost Market · Monad Edition</span></div><p>{t(locale, "Evidence and education, never financial advice.", "Evidencia y educación, nunca asesoramiento financiero.")}</p><a href="/verify">{t(locale, "For Judges / Verify This Project", "Para jueces / Verifica este proyecto")}</a><a href="/docs">{t(locale, "Technical documentation", "Documentación técnica")} <ExternalLink /></a></footer>
   </main>;
 }
 
@@ -130,7 +131,7 @@ function Header({ section, locale, displayMode, calmMode, onNavigate, onLocale, 
   const calmLabel = calmMode ? t(locale, "Calm · motion reduced", "Calma · movimiento reducido") : t(locale, "Calm", "Calma");
   const item = (id: Section) => NAV.find((entry) => entry.id === id)!;
   const secondaryActive = SECONDARY_NAV.includes(section);
-  return <header className="gm-header"><button className="gm-brand" onClick={() => onNavigate("home")} aria-label={t(locale, "Open Monad Markets", "Abrir Mercados Monad")}><GhostGlyph /><span>GHOST MARKET<small>MONAD EDITION · MARKET INTELLIGENCE</small></span></button><nav aria-label={t(locale, "Main navigation", "Navegación principal")}>{PRIMARY_NAV.map((id) => { const entry = item(id); return <button key={id} className={section === id ? "active" : ""} onClick={() => onNavigate(id)}>{locale === "en" ? entry.en : entry.es}</button>; })}<details className={`nav-more ${secondaryActive ? "active" : ""}`}><summary>{t(locale, "BNB legacy & more", "Legado BNB y más")}<ChevronDown /></summary><div>{SECONDARY_NAV.map((id) => { const entry = item(id); return <button key={id} className={section === id ? "active" : ""} onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); onNavigate(id); }}>{locale === "en" ? entry.en : entry.es}</button>; })}</div></details></nav><div className="gm-tools">{!PRIMARY_NAV.includes(section) && <div className="segmented" aria-label={t(locale, "Information depth", "Profundidad de información")}><button className={displayMode === "simple" ? "active" : ""} title={t(locale, "Guided essentials with all risks visible", "Esenciales guiados con todos los riesgos visibles")} onClick={() => onMode("simple")}>Simple</button><button className={displayMode === "pro" ? "active" : ""} title={t(locale, "Full evidence and technical metadata", "Evidencia completa y metadatos técnicos")} onClick={() => onMode("pro")}>Pro</button></div>}<button className="icon-control" onClick={() => onLocale(locale === "en" ? "es" : "en")} aria-label={t(locale, "Change language", "Cambiar idioma")}><Languages /><span>{locale.toUpperCase()}</span></button><button className={`icon-control ${calmMode ? "active" : ""}`} onClick={onCalm} aria-label={calmLabel} title={calmLabel} aria-pressed={calmMode}><MoonStar /><span>{calmLabel}</span></button></div></header>;
+  return <header className="gm-header"><button className="gm-brand" onClick={() => onNavigate("home")} aria-label={t(locale, "Open Monad Markets", "Abrir Mercados Monad")}><GhostGlyph /><span>GHOST MARKET<small>MONAD EDITION · MARKET INTELLIGENCE</small></span></button><nav aria-label={t(locale, "Main navigation", "Navegación principal")}>{PRIMARY_NAV.map((id) => { const entry = item(id); return <button key={id} className={section === id ? "active" : ""} onClick={() => onNavigate(id)}>{locale === "en" ? entry.en : entry.es}</button>; })}<details className={`nav-more ${secondaryActive ? "active" : ""}`}><summary>{t(locale, "BNB legacy & more", "Legado BNB y más")}<ChevronDown /></summary><div>{SECONDARY_NAV.map((id) => { const entry = item(id); return <button key={id} className={section === id ? "active" : ""} onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); onNavigate(id); }}>{locale === "en" ? entry.en : entry.es}</button>; })}</div></details></nav><div className="gm-tools">{!PRIMARY_NAV.includes(section) && section !== "investigation" && <div className="segmented" aria-label={t(locale, "Information depth", "Profundidad de información")}><button className={displayMode === "simple" ? "active" : ""} title={t(locale, "Guided essentials with all risks visible", "Esenciales guiados con todos los riesgos visibles")} onClick={() => onMode("simple")}>Simple</button><button className={displayMode === "pro" ? "active" : ""} title={t(locale, "Full evidence and technical metadata", "Evidencia completa y metadatos técnicos")} onClick={() => onMode("pro")}>Pro</button></div>}<button className="icon-control" onClick={() => onLocale(locale === "en" ? "es" : "en")} aria-label={t(locale, "Change language", "Cambiar idioma")}><Languages /><span>{locale.toUpperCase()}</span></button><button className={`icon-control ${calmMode ? "active" : ""}`} onClick={onCalm} aria-label={calmLabel} title={calmLabel} aria-pressed={calmMode}><MoonStar /><span>{calmLabel}</span></button></div></header>;
 }
 
 function ComprehensionProgress({ locale, section, liveStep, demoChapter }: { locale: Locale; section: Section; liveStep: number; demoChapter: number }) {

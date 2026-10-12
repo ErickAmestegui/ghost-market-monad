@@ -36,6 +36,12 @@ Direction is withheld below five events. Descriptive direction bands use ±25% i
 
 Provider hashes are preserved; this app does not independently establish canonical membership or finality. LIVE is a captured request-time window, not an automatically updating stream. Empty windows are successful results. There is no synthetic production fallback.
 
+## Integrated Ghost investigations
+
+The overview action **Investigate a Real Market Case** scans real Radar logs, selects an active case and opens a cross-market Ghost Report. Kuru spot evidence remains the original captured snapshot while Perpl supplies separately timed current MON context and coarser historical closed hourly buckets when available. No USDC/AUSD equivalence, historical OI/book reconstruction, causal relation or arbitrage signal is inferred. Empty scans offer an explicit new historical query, never bundled example evidence.
+
+Reports export `ghost-report/v1` JSON, print in a scoped readable layout and share deep links with original scan, partition and rule parameters. `/api/ghost-case` reconstructs the bounded scan; `/api/case-context` adds independent timestamps and Perpl context. `/verify` explains source verification, original-code attribution and an honest readiness matrix. See [final sprint evidence](docs/GRAND_CHAMPION_READINESS.md).
+
 ## Providers and configuration
 
 - `GET /api/kuru-flow`: live read-only Monad JSON-RPC.
@@ -67,7 +73,7 @@ npm run dev
 
 A clean `npm run install:ci` was verified with no existing `node_modules` and a new empty cache on Windows (Node 24.16.0, npm 11.13.0). The new lockfile pins registry tarballs and integrity hashes. Next’s required PostCSS 8.5.23 is available and remains unchanged. TypeScript-ESLint is pinned to the previously used 8.71.0 because an attempted 8.71.2 download returned HTTP 404 during verification. Do not bypass the lock with `npm install` in CI. Re-run `npm run install:ci` after intentional lockfile changes. Linux/Cloudflare execution has not been validated in this local Windows session.
 
-Browser regression scripts: `scripts/verify-monad-ui.mjs` and `scripts/verify-championship-ui.mjs` (require Playwright; `PLAYWRIGHT_PACKAGE_PATH` can point to an installed package). Set `GHOST_TEST_URL` to the local server. Test-only failures/slow responses are intercepted within the test browser, never in application code. Captured real provider responses support repeated layout checks; shared case reproduction performs a new historical RPC query.
+Browser regression scripts: `scripts/verify-monad-ui.mjs` and `scripts/verify-championship-ui.mjs` and `scripts/verify-grand-champion-ui.mjs` (require Playwright; `PLAYWRIGHT_PACKAGE_PATH` can point to an installed package). Set `GHOST_TEST_URL` to the local server. Test-only failures/slow responses are intercepted within the test browser, never in application code. Captured real provider responses support repeated layout checks; shared case reproduction performs a new historical RPC query.
 
 ## Attribution and AI disclosure
 

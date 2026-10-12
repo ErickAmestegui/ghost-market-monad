@@ -10,6 +10,7 @@ export type RadarFinding = {
     address?: string;
 };
 export type GhostCase = {
+    scan?: {firstBlock:number;lastBlock:number;windowCount:number};
     id: string;
     evidence: Investigation;
     findings: RadarFinding[];
@@ -95,7 +96,7 @@ export function createRadarCases(snapshot: Investigation, windowCount = 6, rules
             if (!findings.length)
                 findings.push({ code: 'EXECUTED_FLOW', value: trades.length, threshold: rules.minimumTrades, eventKeys: largest ? [tradeKey(largest)] : [] });
         }
-        return { id: `kuru-mon-usdc:${firstBlock}-${lastBlock}`, evidence, findings, interest: 0, category: trades.length ? 'ACTIVE' : 'QUIET', coverage: {status: capped ? 'CAPPED' : 'FULL_RETURNED', returnedEvents: trades.length, decodedEvents: all.length}, sample: {status: sampleStatus, count: trades.length, ruleMinimum: rules.minimumTrades}, rank: 0, rules };
+        return { id: `kuru-mon-usdc:${firstBlock}-${lastBlock}`, evidence, findings, interest: 0, category: trades.length ? 'ACTIVE' : 'QUIET', coverage: {status: capped ? 'CAPPED' : 'FULL_RETURNED', returnedEvents: trades.length, decodedEvents: all.length}, sample: {status: sampleStatus, count: trades.length, ruleMinimum: rules.minimumTrades}, rank: 0, rules, scan:{firstBlock:scope.firstBlock,lastBlock:scope.lastBlock,windowCount} };
     });
     for (const item of cases) {
         const count = item.evidence.analysis!.tradeCount;

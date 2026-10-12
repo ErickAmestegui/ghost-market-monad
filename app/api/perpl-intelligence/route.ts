@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readPerpl, type PerplResult } from '@/lib/monad/perpl-intelligence';
-import { createBoundedProviderCache } from '@/lib/monad/bounded-provider-cache';
-const cachedRead = createBoundedProviderCache<PerplResult>({ ttlMs: 5000, maxEntries: 8, maxConcurrent: 2 });
+import {readCachedPerpl} from '@/lib/monad/perpl-service';
 export async function GET(request: NextRequest) {
     try {
         const q = request.nextUrl.searchParams, raw = q.get('marketId'), hours = Number(q.get('hours') ?? 24);
@@ -9,7 +7,7 @@ export async function GET(request: NextRequest) {
             throw new Error('INVALID_MARKET');
         if (![6, 24, 168, 720].includes(hours))
             throw new Error('INVALID_PERIOD');
-        const data = await cachedRead(`${raw ?? 'MON'}:${hours}`, () => readPerpl({ marketId: raw == null ? undefined : Number(raw), hours }));
+        const data = await readCachedPerpl(raw == null ? undefined : Number(raw), hours);
         return NextResponse.json(data, { status: data.status === 'UNAVAILABLE' ? 503 : 200, headers: { 'cache-control': data.status === 'AVAILABLE' ? 'public, max-age=5' : 'no-store' } });
     }
     catch (error) {

@@ -11,8 +11,11 @@ import { ProviderVerification } from '@/ui/provider-verification';
 import { GhostRadar } from '@/ui/ghost-radar';
 import { readCaseParams, type RadarResult } from '@/lib/monad/ghost-radar';
 import { MonadNetworkPulse } from '@/ui/monad-network-pulse';
+import { GhostCaseReport } from '@/ui/ghost-case-report';
+import { chooseInvestigation, KNOWN_CASE, parseReportQuery } from '@/lib/monad/case-report';
+import { type GhostCase } from '@/lib/monad/ghost-radar';
 
-export type InvestigationView = 'home' | 'radar' | 'perpl' | 'live' | 'historical' | 'explorer';
+export type InvestigationView = 'home' | 'radar' | 'perpl' | 'live' | 'historical' | 'explorer' | 'investigation';
 const t = (l: Locale, en: string, es: string) => l === 'en' ? en : es;
 const n = (value: number | null | undefined, l: Locale, digits = 4) => value == null ? '—' : value.toLocaleString(l === 'en' ? 'en-US' : 'es-BO', { maximumFractionDigits: digits });
 const signed = (value: number, locale: Locale, unit: string) => (value > 0 ? '+' : '') + n(value, locale, 2) + unit;
@@ -28,6 +31,25 @@ const errorCopy = (code: string | undefined, l: Locale) => {
 
 export function KuruFlowIntelligence({ locale, view, onNavigate }: { locale: Locale; view: InvestigationView; onNavigate: (view: InvestigationView) => void }) {
   const [radar, setRadar] = useState<RadarResult | null>(null);
+  const [reportCase, setReportCase] = useState<GhostCase | null>(null);
+  const [caseLoading, setCaseLoading] = useState(false);
+  const [caseError, setCaseError] = useState('');
+  const caseRequest = useRef<AbortController | null>(null);
+  const investigate = useCallback(async (query?: string) => {
+    caseRequest.current?.abort(); const controller = new AbortController(); caseRequest.current = controller;
+    setCaseLoading(true); setCaseError(''); setReportCase(null);
+    try {
+      const response = await fetch(query ? '/api/ghost-case?'+query : '/api/ghost-radar?provider=rpc', {cache:'no-store',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(30000)])});
+      const result = await response.json() as Omit<RadarResult,'status'> & {selected?:GhostCase;status:RadarResult['status']|'READY'};
+      if (!response.ok || !Array.isArray(result.cases) || !['READY','SCANNED'].includes(result.status)) throw new Error(result.error ?? 'INVALID_CASE_RESPONSE');
+      const item = query ? result.selected as GhostCase : chooseInvestigation(result.cases);
+      if (!item?.evidence?.window) throw new Error('NO_CASE_RETURNED');
+      if (!controller.signal.aborted) { setReportCase(item); setRadar(query ? {status:'SCANNED',provider:item.evidence.provider,requestId:item.evidence.requestId,observedAt:item.evidence.observedAt,rules:item.rules,cases:result.cases,scope:{firstBlock:item.scan!.firstBlock,lastBlock:item.scan!.lastBlock,blockCount:item.scan!.lastBlock-item.scan!.firstBlock+1,windowCount:item.scan!.windowCount,decodedEvents:result.cases.reduce((s:number,c:GhostCase)=>s+c.coverage.decodedEvents,0)}} : {...result,status:'SCANNED'}); }
+    } catch(error) { if(!controller.signal.aborted) setCaseError(error instanceof Error && /^[A-Z_]+$/.test(error.message) ? error.message : 'CLIENT_OR_TIMEOUT'); }
+    finally {if(!controller.signal.aborted)setCaseLoading(false);}
+  }, []);
+  const findCase = () => {onNavigate('investigation');void investigate();};
+  const presetCase = () => {onNavigate('investigation');void investigate(new URLSearchParams({view:'investigation',market:'kuru-mon-usdc',provider:'rpc',fromBlock:String(KNOWN_CASE.firstBlock),toBlock:String(KNOWN_CASE.lastBlock)}).toString());};
   const [live, setLive] = useState<Investigation | null>(null);
   const [historical, setHistorical] = useState<Investigation | null>(null);
   const [liveLoading, setLiveLoading] = useState(false);
@@ -65,14 +87,19 @@ export function KuruFlowIntelligence({ locale, view, onNavigate }: { locale: Loc
     }
   }, []);
   useEffect(() => {
-    if ((view !== 'live' && view !== 'explorer') || live || liveLoading) return;
+    if ((view !== 'live' && view !== 'explorer') || live || liveLoading || (view === 'explorer' && source === 'historical' && historical?.window)) return;
     const timer = setTimeout(() => { void load('live', '/api/kuru-flow'); }, 0);
     return () => clearTimeout(timer);
-  }, [view, live, liveLoading, load]);
+  }, [view, live, liveLoading, load, source, historical]);
   useEffect(() => {
     const requests = controllers.current;
     return () => { requests.live?.abort(); requests.historical?.abort(); };
   }, []);
+  useEffect(() => {
+    const q=new URLSearchParams(window.location.search); if(q.get('view')!=='investigation')return;
+    const timer=setTimeout(()=>{try{parseReportQuery(q);void investigate(q.toString());}catch{setCaseError('INVALID_CASE_QUERY');}},0);
+    return ()=>{clearTimeout(timer);caseRequest.current?.abort();};
+  },[investigate]);
   useEffect(() => {
     const timer = setTimeout(() => {
       try { const c = readCaseParams(new URLSearchParams(window.location.search)); if (!c) return;
@@ -102,10 +129,17 @@ export function KuruFlowIntelligence({ locale, view, onNavigate }: { locale: Loc
   };
   const resetFilters = () => { setSearch(''); setSide('ALL'); setSelected(''); };
 
-  if (view === 'perpl') return <PerplIntelligence locale={locale} spot={live} />;
-  if (view === 'radar') return <GhostRadar locale={locale} data={radar} onData={setRadar} onOpen={(caseData, baseline) => { setHistorical(caseData); setFrom(String(caseData.window!.firstBlock)); setTo(String(caseData.window!.lastBlock)); setProvider(caseData.provider === 'Envio HyperSync' ? 'envio' : 'rpc'); setSource('historical'); resetFilters(); if (baseline) { setPinned(baseline); setComparisonMode('windows'); } onNavigate('historical'); }} />;
+  const openReportEvidence = (target:'historical'|'explorer', compare=false) => {
+    if(!reportCase)return; const original=reportCase.evidence;
+    setHistorical(original);setFrom(String(original.window!.firstBlock));setTo(String(original.window!.lastBlock));setSource('historical');setProvider(original.provider==='Envio HyperSync'?'envio':'rpc');resetFilters();
+    if(compare){setPinned(original);setComparisonMode('windows');const other=radar?.cases.find(c=>c.id!==reportCase.id&&!c.evidence.window?.capped);if(other){setHistorical(other.evidence);setFrom(String(other.evidence.window!.firstBlock));setTo(String(other.evidence.window!.lastBlock));}else{setHistorical(null);}}
+    onNavigate(target);
+  };
+  if (view === 'investigation') return <GhostCaseReport locale={locale} item={reportCase} loading={caseLoading} error={caseError} onFind={findCase} onPreset={presetCase} onReplay={()=>openReportEvidence('explorer')} onCompare={()=>openReportEvidence('historical',true)} onPerpl={()=>onNavigate('perpl')}/>;
+  if (view === 'perpl') return <>{reportCase&&<div className="page-shell report-return"><button className="secondary-action" onClick={()=>onNavigate('investigation')}>{t(locale,'Return to original Ghost Report','Volver al informe Ghost original')}</button></div>}<PerplIntelligence locale={locale} spot={reportCase?.evidence ?? live} /></>;
+  if (view === 'radar') return <GhostRadar locale={locale} data={radar} onData={setRadar} onInvestigate={item => {setReportCase(item);setCaseError('');onNavigate('investigation');}} onOpen={(caseData, baseline) => { setHistorical(caseData); setFrom(String(caseData.window!.firstBlock)); setTo(String(caseData.window!.lastBlock)); setProvider(caseData.provider === 'Envio HyperSync' ? 'envio' : 'rpc'); setSource('historical'); resetFilters(); if (baseline) { setPinned(baseline); setComparisonMode('windows'); } onNavigate('historical'); }} />;
   if (view === 'home') return <section className="page-shell research-home">
-    <div className="research-home-hero"><div><p className="eyebrow">MONAD MARKETS · KURU MON/USDC</p><h1>{t(locale, 'Follow the trade. Verify the story.', 'Sigue la operación. Verifica la historia.')}</h1><p>{t(locale, 'Investigate executed order flow on Monad. Select an event, inspect its participants and verify its transaction on the explorer.', 'Investiga el flujo ejecutado en Monad. Selecciona un evento, inspecciona sus participantes y verifica su transacción en el explorador.')}</p><div className="research-actions"><button className="primary-action" onClick={() => onNavigate('radar')}>Ghost Radar · {t(locale, 'Find an Investigation', 'Encontrar una investigación')} <ArrowRight /></button><button className="secondary-action" onClick={() => onNavigate('live')}>{t(locale, 'Start live investigation', 'Investigar en vivo')} <ArrowRight /></button><button className="secondary-action" onClick={() => onNavigate('historical')}><History />{t(locale, 'Open historical replay', 'Abrir replay histórico')}</button></div></div><Image src="/ghost-companion.png" width={230} height={230} priority alt={t(locale, 'Ghost with a magnifying glass', 'Ghost con una lupa')} /></div>
+    <div className="research-home-hero"><div><p className="eyebrow">MONAD MARKETS · KURU MON/USDC</p><h1>{t(locale, 'Follow the trade. Verify the story.', 'Sigue la operación. Verifica la historia.')}</h1><p>{t(locale, 'Investigate executed order flow on Monad. Select an event, inspect its participants and verify its transaction on the explorer.', 'Investiga el flujo ejecutado en Monad. Selecciona un evento, inspecciona sus participantes y verifica su transacción en el explorador.')}</p><div className="research-actions"><button className="primary-action" onClick={findCase}>{t(locale, 'Investigate a Real Market Case', 'Investigar un caso real de mercado')} <ArrowRight /></button><button className="secondary-action" onClick={() => onNavigate('radar')}>Ghost Radar · {t(locale, 'Find an Investigation', 'Encontrar una investigación')} <ArrowRight /></button><button className="secondary-action" onClick={() => onNavigate('live')}>{t(locale, 'Start live investigation', 'Investigar en vivo')} <ArrowRight /></button><button className="secondary-action" onClick={() => onNavigate('historical')}><History />{t(locale, 'Open historical replay', 'Abrir replay histórico')}</button></div></div><Image src="/ghost-companion.png" width={230} height={230} priority alt={t(locale, 'Ghost with a magnifying glass', 'Ghost con una lupa')} /></div>
     <div className="research-entry-grid">{([
       ['live', Activity, t(locale, 'Live Investigation', 'Investigación en vivo'), t(locale, 'Read the latest 720 blocks. Separate observed trades from rule-based interpretations.', 'Lee los últimos 720 bloques. Separa operaciones observadas de interpretaciones por reglas.')],
       ['historical', History, t(locale, 'Historical Replay', 'Replay histórico'), t(locale, 'Return to block 112682099 or query your own range. Compare two historical windows.', 'Vuelve al bloque 112682099 o consulta tu rango. Compara dos ventanas históricas.')],
@@ -115,7 +149,7 @@ export function KuruFlowIntelligence({ locale, view, onNavigate }: { locale: Loc
   </section>;
 
   return <section className="page-shell research-workspace" aria-labelledby="research-title">
-    <header className="research-heading"><div><p className="eyebrow">MONAD MARKETS · KURU FLOW FORENSICS</p><h1 id="research-title">{view === 'live' ? t(locale, 'Live Investigation', 'Investigación en vivo') : view === 'historical' ? t(locale, 'Historical Replay', 'Replay histórico') : t(locale, 'Evidence Explorer', 'Explorador de evidencia')}</h1><p>{t(locale, 'MON/USDC executed trades. Choose an event to inspect its evidence.', 'Operaciones ejecutadas MON/USDC. Elige un evento para inspeccionar su evidencia.')}</p></div>{view === 'live' && <button className="secondary-action" disabled={liveLoading} onClick={() => { resetFilters(); void load('live', '/api/kuru-flow'); }}><RefreshCw />{t(locale, 'Read latest window', 'Leer ventana reciente')}</button>}</header>
+    {reportCase&&<div className="report-return"><button className="secondary-action" onClick={()=>onNavigate('investigation')}>{t(locale,'Return to original Ghost Report','Volver al informe Ghost original')}</button></div>}<header className="research-heading"><div><p className="eyebrow">MONAD MARKETS · KURU FLOW FORENSICS</p><h1 id="research-title">{view === 'live' ? t(locale, 'Live Investigation', 'Investigación en vivo') : view === 'historical' ? t(locale, 'Historical Replay', 'Replay histórico') : t(locale, 'Evidence Explorer', 'Explorador de evidencia')}</h1><p>{t(locale, 'MON/USDC executed trades. Choose an event to inspect its evidence.', 'Operaciones ejecutadas MON/USDC. Elige un evento para inspeccionar su evidencia.')}</p></div>{view === 'live' && <button className="secondary-action" disabled={liveLoading} onClick={() => { resetFilters(); void load('live', '/api/kuru-flow'); }}><RefreshCw />{t(locale, 'Read latest window', 'Leer ventana reciente')}</button>}</header>
     {view === 'historical' && <div className="research-history-controls">
       <form onSubmit={event => { event.preventDefault(); runHistory(); }}><label>{t(locale, 'From block', 'Desde bloque')}<input required inputMode="numeric" pattern="[0-9]+" value={from} onChange={e => setFrom(e.target.value)} /></label><label>{t(locale, 'To block (inclusive)', 'Hasta bloque (inclusivo)')}<input required inputMode="numeric" pattern="[0-9]+" value={to} onChange={e => setTo(e.target.value)} /></label><label>{t(locale, 'Evidence provider', 'Proveedor de evidencia')}<select value={provider} onChange={e => setProvider(e.target.value)}><option value="rpc">Monad RPC · ≤720 {t(locale, 'blocks', 'bloques')}</option><option value="envio">Envio HyperSync · ≤10,000</option></select></label><button className="primary-action" disabled={historyLoading}><History />{t(locale, 'Query history', 'Consultar historial')}</button></form>
       <div className="research-preset"><button className="secondary-action" disabled={historyLoading} onClick={() => { const block = String(HISTORICAL_EXAMPLE_BLOCK); setFrom(block); setTo(block); runHistory(block, block); }}>{t(locale, 'Investigate block 112682099', 'Investigar bloque 112682099')}</button><span>{t(locale, 'Real historical investigation · queried on demand', 'Investigación histórica real · consulta bajo demanda')}</span>{live?.window && <button className="secondary-action" disabled={historyLoading} onClick={() => { setFrom(String(live.window!.firstBlock)); setTo(String(live.window!.lastBlock)); runHistory(String(live.window!.firstBlock), String(live.window!.lastBlock)); }}>{t(locale, 'Replay captured live range', 'Reproducir rango capturado en vivo')}</button>}</div>
