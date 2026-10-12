@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { createRadarCases, RADAR_DEFAULT_RULES, readCaseParams, caseSearchParams, validateRadarRules, radarBarHeight } from '../lib/monad/ghost-radar.ts';
+import { analyzeKuruFlow, type KuruTrade } from '../lib/monad/kuru-flow.ts';
+import type { Investigation } from '../lib/monad/kuru-investigation.ts';
+import { compareProviderEvents } from '../lib/monad/provider-agreement.ts';
+const event = (i: number, size = 10, side: 'BUY' | 'SELL' = 'BUY'): KuruTrade => ({ blockNumber: 100 + i, logIndex: i, transactionHash: '0x' + 'a'.repeat(64), side, priceUsd: 1, sizeMon: size, notionalUsd: size, orderId: i, orderRemainingMon: 0, makerAddress: '0x' + '1'.repeat(40), takerAddress: '0x' + '2'.repeat(40), txOrigin: '0x' + '3'.repeat(40) });
+const snapshot = (trades: KuruTrade[], capped = false): Investigation => ({ status: 'REPLAYED', mode: 'HISTORICAL', provider: 'Monad JSON-RPC', observedAt: '2026-10-12T18:00:00Z', requestId: 'SYNTHETIC_UNIT_FIXTURE', window: { firstBlock: 100, lastBlock: 219, blockCount: 120, decodedTradeCount: trades.length, returnedTradeCount: trades.length, capped }, trades, analysis: analyzeKuruFlow(trades), warnings: [] });
+test('Radar coverage counts must match the full evidence before quiet windows are inferred', () => {
+    const invalid = snapshot([]); invalid.window!.decodedTradeCount = 1;
+    assert.throws(() => createRadarCases(invalid), /INCOMPLETE/);
+    invalid.window!.decodedTradeCount = 0; invalid.window!.blockCount = 119;
+    assert.throws(() => createRadarCases(invalid), /INCOMPLETE/);
+});
+test('Radar activity compares density against the nonzero mean of other complete windows', () => {
+    const data = snapshot([...Array.from({length: 6}, (_,i) => event(i)), event(70)]);
+    const result = createRadarCases(data, 2);
+    assert.equal(result.cases[0].findings.find(f => f.code === 'ACTIVITY_CLUSTER')?.value, 6);
+    assert.equal(createRadarCases(data, 2, {activityMultiple: 7}).cases[0].findings.some(f => f.code === 'ACTIVITY_CLUSTER'), false);
+});
+test('radar finds concentration and repeated addresses automatically in real-shaped test events', () => { const result = createRadarCases(snapshot([event(0, 100), event(1), event(2)]), 2); assert.equal(result.cases[0].evidence.window?.firstBlock, 100); assert.ok(result.cases[0].findings.some(f => f.code === 'CONCENTRATION')); assert.ok(result.cases[0].findings.some(f => f.code === 'REPEATED_ADDRESS')); assert.equal(result.cases[0].sample.status, 'SPARSE'); assert.ok(result.cases[0].interest <= 35); assert.equal(result.cases.some(c => c.findings.some(f => f.code === 'QUIET')), true); });
+test('direction needs minimum sample and configurable threshold', () => { const events = Array.from({ length: 6 }, (_, i) => event(i)); const r = createRadarCases(snapshot(events), 1); assert.ok(r.cases[0].findings.some(f => f.code === 'IMBALANCE')); const sparse = createRadarCases(snapshot(events), 1, { minimumTrades: 7 }); assert.ok(!sparse.cases[0].findings.some(f => f.code === 'IMBALANCE')); });
+test('no person identity or duplicate participant role counting is inferred', () => { const events = [event(0), event(1)]; events.forEach(e => e.takerAddress = e.makerAddress); const r = createRadarCases(snapshot(events), 1); assert.equal(r.cases[0].findings.find(f => f.code === 'REPEATED_ADDRESS')?.value, 2); });
+test('radar validates full horizon and withholds patterns in truncated case views', () => { assert.throws(() => createRadarCases(snapshot([], true)), /INCOMPLETE/); assert.throws(() => createRadarCases(snapshot([event(0), event(0)])), /INVALID/); const r = createRadarCases(snapshot(Array.from({ length: 61 }, (_, i) => event(i))), 1); assert.equal(r.cases[0].coverage.status, 'CAPPED'); assert.deepEqual(r.cases[0].findings.map(f => f.code), ['PARTIAL']); });
+test('empty horizons are evidence, not discovery failures or market safety', () => { const r = createRadarCases(snapshot([]), 6); assert.equal(r.cases.length, 6); assert.ok(r.cases.every(c => c.interest === 0)); assert.equal(r.scope?.decodedEvents, 0); });
+test('partitioning has no gaps or overlaps', () => { const r = createRadarCases(snapshot([]), 7); const windows = r.cases.map(c => c.evidence.window!).sort((a, b) => a.firstBlock - b.firstBlock); assert.equal(windows[0].firstBlock, 100); assert.equal(windows.at(-1)?.lastBlock, 219); windows.slice(1).forEach((w, i) => assert.equal(w.firstBlock, windows[i].lastBlock + 1)); });
+test('case links reproduce bounded official-market parameters and reject injected endpoints', () => { const c = createRadarCases(snapshot([event(0)]), 1).cases[0]; const q = new URLSearchParams(caseSearchParams(c)); assert.equal(readCaseParams(q)?.fromBlock, 100); q.set('provider', 'https://evil.example'); assert.throws(() => readCaseParams(q)); assert.equal(readCaseParams(new URLSearchParams('view=historical&market=OTHER')), null); });
+test('rules reject invalid ranges, NaN and zero minimum samples', () => { assert.throws(() => validateRadarRules({ minimumTrades: 0 })); assert.throws(() => validateRadarRules({ imbalancePercent: NaN })); assert.deepEqual(validateRadarRules({}), RADAR_DEFAULT_RULES); });
+test('provider comparison matches event keys and detects scale/hash disagreement', () => { const a = { ...event(0), blockHash: '0x' + 'b'.repeat(64) }; assert.equal(compareProviderEvents([a], [a]).agreement, true); assert.equal(compareProviderEvents([a], [{ ...a, sizeMon: 11 }]).agreement, false); assert.equal(compareProviderEvents([a], []).onlyRpc.length, 1); assert.throws(() => compareProviderEvents([a, a], [a])); });
+
+test('Radar separates returned coverage from heuristic sample minimum and keeps quiet intervals secondary',()=>{const r=createRadarCases(snapshot([event(0)]),2);const populated=r.cases[0];assert.equal(populated.coverage.status,'FULL_RETURNED');assert.equal(populated.sample.status,'SPARSE');assert.equal(populated.category,'ACTIVE');assert.equal(r.cases[1].category,'QUIET');assert.equal(r.cases[1].sample.status,'EMPTY');assert.equal('evidenceScore' in populated,false);assert.equal(radarBarHeight(0,5),0);assert.equal(radarBarHeight(1,5),10);assert.equal(radarBarHeight(5,5),50);});

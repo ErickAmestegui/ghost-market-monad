@@ -20,6 +20,8 @@ Official [supported networks](https://docs.envio.dev/docs/HyperSync/hypersync-su
 
 The Historical Replay provider picker exposes this path, including CONFIG_REQUIRED. **The feature depending on Envio is the separate historical event retrieval path and its pagination over up to 10,000 blocks.** RPC historical replay and Live Investigation remain independent and functional. Envio is not claimed as the source when RPC is selected.
 
+The championship sprint also exposes Envio as the explicit Ghost Radar provider (10,000 blocks ending at a chosen block) and adds `/api/kuru-provider-compare` to compare one ≤720-block window across RPC/Envio. Exact repeated event keys are deduplicated; contradictory repeated data or joined block hashes, lagging archive height and oversized responses fail closed. These added paths remain **CONFIG_REQUIRED** without a token. Tests exercise synthetic provider envelopes only; no authenticated production result is asserted. See [Championship readiness](CHAMPIONSHIP_READINESS.md) for secure activation and verification steps.
+
 ## Remaining verification
 
 Provide a server token through authorized configuration, run the block preset through Envio, compare actual event keys, prices, sizes and block hashes to RPC, then exercise pagination on a real larger range. Token-scoped service availability and partial/reorganization behavior require real provider verification. Tests currently use explicitly synthetic provider fixtures, not production fallback evidence.

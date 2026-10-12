@@ -1,6 +1,12 @@
 # Ghost Market: Monad Edition
 
-Investigate real Kuru MON/USDC fills on Monad mainnet (chain ID 143). The main product has four bilingual views: Overview, Live Investigation, Historical Replay and Evidence Explorer. Ghost's visual identity, companion and inherited modules are retained. BNB modules are accessible under **BNB legacy & more** and do not load their providers while a Monad view is active.
+Investigate real Kuru MON/USDC fills on Monad mainnet (chain ID 143). **Ghost Radar** discovers reproducible investigations from a bounded real block scan. **Perpl Market Intelligence** independently exposes official perpetual market data. Overview, Live Investigation, Historical Replay and Evidence Explorer remain available in English and Spanish. Ghost's visual identity, companion and inherited modules are retained. BNB modules are accessible under **BNB legacy & more** and do not load their providers while a Monad view is active.
+
+## Discover a Ghost Case
+
+Choose **Find an Investigation** on the overview. Radar scans the latest 720 RPC blocks once, partitions them into six windows, and ranks cases by disclosed analytical rules and sample size. Inspect contributors, open a case in Replay, compare another window, copy a reproducible block-range link or export its evidence. Concentration, aggressor imbalance, repeated emitted addresses and relative activity are deterministic review prompts, not identity, manipulation or profit claims. Returned-event coverage is separate from sample size; meeting a heuristic minimum is not statistical confidence. Empty windows are retained in a collapsed secondary category and have zero-height bars; capped case views withhold pattern findings.
+
+Perpl uses public GET endpoints at `https://app.perpl.xyz/api` after validating chain 143 and official per-market decimals. Inspect closed 1h candles over 6h/24h/7d/30d, mark/oracle/last, provider-reported volume/open interest, funding per configured interval, and top-10 book snapshots. MON spot/perpetual context retains different units and timestamps without an arbitrage calculation. Perpl Risk Investigator explains funding extremes, historical hourly volatility, quoted spread/depth concentration and snapshot open-interest context. Nested 24h/7d/30d comparisons require complete candles for volume/hour and volatility; funding averages describe only returned rates. Historical open interest, depth, liquidations, positions and P&L are not inferred. Endpoints fail independently; no wallet or API key is required. See [Championship readiness](docs/CHAMPIONSHIP_READINESS.md) for verified captures, scope and sponsor limitations.
 
 ## Investigate and reproduce
 
@@ -36,6 +42,9 @@ Provider hashes are preserved; this app does not independently establish canonic
 - `GET /api/kuru-history?fromBlock=112682099&toBlock=112682099`: historical RPC.
 - `GET /api/kuru-replay?fromBlock=<n>&toBlock=<n>`: Envio HyperSync, no RPC fallback.
 - `GET /api/monad-pulse`: network context.
+- `GET /api/ghost-radar?provider=rpc`: automatic discovery; optional `toBlock` and validated rule parameters. Envio requires a token and explicit end block.
+- `GET /api/kuru-provider-compare?fromBlock=<n>&toBlock=<n>`: same-window RPC/Envio decoded-field agreement, at most 720 blocks; conditional on server token.
+- `GET /api/perpl-intelligence?marketId=10&hours=24`: validated independent Perpl endpoints; optional market ID from official context and 6/24/168/720 closed hours.
 
 `MONAD_RPC_URL` optionally overrides `https://rpc.monad.xyz`, server-side HTTPS only. `ENVIO_API_TOKEN` is server-only and is sent solely to the fixed `https://monad.hypersync.xyz/query` endpoint. Missing token returns CONFIG_REQUIRED; provider errors are sanitized and never reflect credential URLs. Requests have overall deadlines and bounded pagination/results.
 
@@ -58,7 +67,7 @@ npm run dev
 
 A clean `npm run install:ci` was verified with no existing `node_modules` and a new empty cache on Windows (Node 24.16.0, npm 11.13.0). The new lockfile pins registry tarballs and integrity hashes. Next’s required PostCSS 8.5.23 is available and remains unchanged. TypeScript-ESLint is pinned to the previously used 8.71.0 because an attempted 8.71.2 download returned HTTP 404 during verification. Do not bypass the lock with `npm install` in CI. Re-run `npm run install:ci` after intentional lockfile changes. Linux/Cloudflare execution has not been validated in this local Windows session.
 
-Browser regression script: `scripts/verify-monad-ui.mjs` (requires Playwright; `PLAYWRIGHT_PACKAGE_PATH` can point to an installed package). Runs against `GHOST_TEST_URL` or `http://127.0.0.1:5173`. Test-only failures/slow responses are intercepted within the test browser, never in application code.
+Browser regression scripts: `scripts/verify-monad-ui.mjs` and `scripts/verify-championship-ui.mjs` (require Playwright; `PLAYWRIGHT_PACKAGE_PATH` can point to an installed package). Set `GHOST_TEST_URL` to the local server. Test-only failures/slow responses are intercepted within the test browser, never in application code. Captured real provider responses support repeated layout checks; shared case reproduction performs a new historical RPC query.
 
 ## Attribution and AI disclosure
 

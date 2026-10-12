@@ -6,9 +6,13 @@ import { Activity, ArrowRight, Download, ExternalLink, Fingerprint, History, Ref
 import type { Locale } from '@/data/types';
 import { KURU_MON_USDC_MARKET } from '@/lib/monad/kuru-flow';
 import { HISTORICAL_EXAMPLE_BLOCK, compareInvestigations, evidenceLinks, tradeKey, type EvidenceTrade, type Investigation } from '@/lib/monad/kuru-investigation';
+import { PerplIntelligence } from '@/ui/perpl-intelligence';
+import { ProviderVerification } from '@/ui/provider-verification';
+import { GhostRadar } from '@/ui/ghost-radar';
+import { readCaseParams, type RadarResult } from '@/lib/monad/ghost-radar';
 import { MonadNetworkPulse } from '@/ui/monad-network-pulse';
 
-export type InvestigationView = 'home' | 'live' | 'historical' | 'explorer';
+export type InvestigationView = 'home' | 'radar' | 'perpl' | 'live' | 'historical' | 'explorer';
 const t = (l: Locale, en: string, es: string) => l === 'en' ? en : es;
 const n = (value: number | null | undefined, l: Locale, digits = 4) => value == null ? '—' : value.toLocaleString(l === 'en' ? 'en-US' : 'es-BO', { maximumFractionDigits: digits });
 const signed = (value: number, locale: Locale, unit: string) => (value > 0 ? '+' : '') + n(value, locale, 2) + unit;
@@ -23,6 +27,7 @@ const errorCopy = (code: string | undefined, l: Locale) => {
 };
 
 export function KuruFlowIntelligence({ locale, view, onNavigate }: { locale: Locale; view: InvestigationView; onNavigate: (view: InvestigationView) => void }) {
+  const [radar, setRadar] = useState<RadarResult | null>(null);
   const [live, setLive] = useState<Investigation | null>(null);
   const [historical, setHistorical] = useState<Investigation | null>(null);
   const [liveLoading, setLiveLoading] = useState(false);
@@ -68,6 +73,14 @@ export function KuruFlowIntelligence({ locale, view, onNavigate }: { locale: Loc
     const requests = controllers.current;
     return () => { requests.live?.abort(); requests.historical?.abort(); };
   }, []);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try { const c = readCaseParams(new URLSearchParams(window.location.search)); if (!c) return;
+        setFrom(String(c.fromBlock)); setTo(String(c.toBlock)); setProvider(c.provider); setSource('historical');
+        void load('historical', '/api/'+(c.provider==='envio'?'kuru-replay':'kuru-history')+'?fromBlock='+c.fromBlock+'&toBlock='+c.toBlock);
+      } catch { setHistorical({status:'UNAVAILABLE',mode:'HISTORICAL',provider:'Monad JSON-RPC',requestId:'INVALID_CASE_LINK',observedAt:new Date().toISOString(),error:'INVALID_RANGE',warnings:[]}); }
+    }, 0); return () => clearTimeout(timer);
+  }, [load]);
   const runHistory = (first = from, last = to) => {
     setSource('historical'); setSearch(''); setSide('ALL');
     void load('historical', `/api/${provider === 'envio' ? 'kuru-replay' : 'kuru-history'}?fromBlock=${encodeURIComponent(first)}&toBlock=${encodeURIComponent(last)}`);
@@ -89,8 +102,10 @@ export function KuruFlowIntelligence({ locale, view, onNavigate }: { locale: Loc
   };
   const resetFilters = () => { setSearch(''); setSide('ALL'); setSelected(''); };
 
+  if (view === 'perpl') return <PerplIntelligence locale={locale} spot={live} />;
+  if (view === 'radar') return <GhostRadar locale={locale} data={radar} onData={setRadar} onOpen={(caseData, baseline) => { setHistorical(caseData); setFrom(String(caseData.window!.firstBlock)); setTo(String(caseData.window!.lastBlock)); setProvider(caseData.provider === 'Envio HyperSync' ? 'envio' : 'rpc'); setSource('historical'); resetFilters(); if (baseline) { setPinned(baseline); setComparisonMode('windows'); } onNavigate('historical'); }} />;
   if (view === 'home') return <section className="page-shell research-home">
-    <div className="research-home-hero"><div><p className="eyebrow">MONAD MARKETS · KURU MON/USDC</p><h1>{t(locale, 'Follow the trade. Verify the story.', 'Sigue la operación. Verifica la historia.')}</h1><p>{t(locale, 'Investigate executed order flow on Monad. Select an event, inspect its participants and verify its transaction on the explorer.', 'Investiga el flujo ejecutado en Monad. Selecciona un evento, inspecciona sus participantes y verifica su transacción en el explorador.')}</p><div className="research-actions"><button className="primary-action" onClick={() => onNavigate('live')}>{t(locale, 'Start live investigation', 'Investigar en vivo')} <ArrowRight /></button><button className="secondary-action" onClick={() => onNavigate('historical')}><History />{t(locale, 'Open historical replay', 'Abrir replay histórico')}</button></div></div><Image src="/ghost-companion.png" width={230} height={230} priority alt={t(locale, 'Ghost with a magnifying glass', 'Ghost con una lupa')} /></div>
+    <div className="research-home-hero"><div><p className="eyebrow">MONAD MARKETS · KURU MON/USDC</p><h1>{t(locale, 'Follow the trade. Verify the story.', 'Sigue la operación. Verifica la historia.')}</h1><p>{t(locale, 'Investigate executed order flow on Monad. Select an event, inspect its participants and verify its transaction on the explorer.', 'Investiga el flujo ejecutado en Monad. Selecciona un evento, inspecciona sus participantes y verifica su transacción en el explorador.')}</p><div className="research-actions"><button className="primary-action" onClick={() => onNavigate('radar')}>Ghost Radar · {t(locale, 'Find an Investigation', 'Encontrar una investigación')} <ArrowRight /></button><button className="secondary-action" onClick={() => onNavigate('live')}>{t(locale, 'Start live investigation', 'Investigar en vivo')} <ArrowRight /></button><button className="secondary-action" onClick={() => onNavigate('historical')}><History />{t(locale, 'Open historical replay', 'Abrir replay histórico')}</button></div></div><Image src="/ghost-companion.png" width={230} height={230} priority alt={t(locale, 'Ghost with a magnifying glass', 'Ghost con una lupa')} /></div>
     <div className="research-entry-grid">{([
       ['live', Activity, t(locale, 'Live Investigation', 'Investigación en vivo'), t(locale, 'Read the latest 720 blocks. Separate observed trades from rule-based interpretations.', 'Lee los últimos 720 bloques. Separa operaciones observadas de interpretaciones por reglas.')],
       ['historical', History, t(locale, 'Historical Replay', 'Replay histórico'), t(locale, 'Return to block 112682099 or query your own range. Compare two historical windows.', 'Vuelve al bloque 112682099 o consulta tu rango. Compara dos ventanas históricas.')],
@@ -125,6 +140,7 @@ export function KuruFlowIntelligence({ locale, view, onNavigate }: { locale: Loc
       <div className="research-proof-actions"><button className="secondary-action" onClick={exportEvidence}><Download />{t(locale, 'Export evidence JSON', 'Exportar evidencia JSON')}</button><button className="secondary-action" onClick={() => { setSource(activeSource); onNavigate('explorer'); }}><Search />{t(locale, 'Open Evidence Explorer', 'Abrir explorador de evidencia')}</button><a href={`https://monadscan.com/address/${KURU_MON_USDC_MARKET}`} target="_blank" rel="noreferrer">{t(locale, 'Market contract', 'Contrato del mercado')} <ExternalLink /></a><a href="https://docs.kuru.io/contracts/Contract-addresses" target="_blank" rel="noreferrer">{t(locale, 'Official Kuru addresses', 'Direcciones oficiales Kuru')} <ExternalLink /></a></div>
       <details className="technical-disclosure"><summary>{t(locale, 'Source, methodology and limits', 'Fuente, metodología y límites')}</summary><p>{data.provider} · {t(locale, 'request', 'consulta')} {data.requestId}</p><p>{t(locale, 'Price is USDC per MON, decoded with 1e18 precision; size uses 1e10. USDC is not assumed to equal USD. BUY/SELL is aggressor side from the official Trade ABI, not a user instruction.', 'El precio es USDC por MON, decodificado con precisión 1e18; el tamaño usa 1e10. No se asume que USDC equivale a USD. COMPRA/VENTA es el lado agresor del ABI Trade oficial, no una instrucción al usuario.')}</p><a href="https://github.com/Kuru-Labs/Kuru-contracts-dex-public/blob/2060bb2736080c175d80d568bfdb6226bb5abd04/contracts/interfaces/IOrderBook.sol" target="_blank" rel="noreferrer">{t(locale, 'Pinned official ABI', 'ABI oficial fijado')}</a><p>{t(locale, 'Hashes and decoded fields are provider evidence. Finality and canonical chain membership are not independently established by this app.', 'Los hashes y campos decodificados son evidencia del proveedor. La aplicación no establece de forma independiente finalidad ni pertenencia a la cadena canónica.')}</p></details>
     </>}
+    {view === 'historical' && <ProviderVerification key={from+':'+to} locale={locale} firstBlock={from} lastBlock={to} />}
     {view === 'historical' && <article className="research-comparison" aria-labelledby="comparison-title">
       <header><div><p className="eyebrow">{t(locale, 'CAPTURED WINDOW COMPARISON', 'COMPARACIÓN DE VENTANAS CAPTURADAS')}</p><h2 id="comparison-title">{t(locale, 'Compare evidence windows', 'Comparar ventanas de evidencia')}</h2></div><div className="research-source-switch"><button aria-pressed={comparisonMode === 'live'} onClick={() => setComparisonMode('live')}>LIVE ↔ {t(locale, 'HISTORICAL', 'HISTÓRICO')}</button><button aria-pressed={comparisonMode === 'windows'} onClick={() => setComparisonMode('windows')}>{t(locale, 'Historical A ↔ B', 'Histórica A ↔ B')}</button></div></header>
       <p>{t(locale, 'Keep a baseline as A, then query B. Volume is normalized per block; price and imbalance changes describe B relative to A.', 'Guarda una referencia como A y después consulta B. El volumen se normaliza por bloque; los cambios de precio y desequilibrio describen B respecto a A.')}</p>

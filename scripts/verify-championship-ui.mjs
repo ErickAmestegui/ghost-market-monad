@@ -1,0 +1,111 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+const packagePath = process.env.PLAYWRIGHT_PACKAGE_PATH;
+const { chromium } = packagePath ? await import(pathToFileURL(path.join(packagePath, 'index.mjs')).href) : await import('playwright');
+const base = process.env.GHOST_TEST_URL ?? 'http://127.0.0.1:5179';
+const output = path.resolve('work/championship'); await fs.mkdir(output, { recursive: true });
+const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL ?? 'msedge' });
+const checks = [], errors = [];
+const record = (name, detail = 'passed') => { checks.push({ name, detail }); console.log(name, detail); };
+try {
+  const api = await browser.newContext();
+  const read = async pathname => { const r = await api.request.get(base + pathname); return { status: r.status(), body: await r.json() }; };
+  const automatic = await read('/api/ghost-radar'); assert.equal(automatic.body.status, 'SCANNED'); assert.equal(automatic.body.scope.blockCount, 720); record('Automatic real Radar discovery', automatic.body.scope);
+  const preset = await read('/api/ghost-radar?toBlock=112682099'); assert.equal(preset.status, 200); assert.equal(preset.body.scope.decodedEvents, 4); assert.equal(preset.body.cases.length, 6); record('Real Radar known horizon', 'four events / six windows');
+  const perpl = await read('/api/perpl-intelligence'); assert.equal(perpl.body.status, 'AVAILABLE'); assert.equal(perpl.body.market.unit, 'MON'); assert.equal(perpl.body.traces.length, 5); assert.equal(perpl.body.history.candles.length, 24); record('Independent real Perpl endpoints', 'MON / 24 closed candles / four verified endpoints');
+  const long = await read('/api/perpl-intelligence?marketId=10&hours=720'); assert.equal(long.body.status,'AVAILABLE'); assert.equal(long.body.history.candles.length,720); assert.deepEqual(long.body.risk.windows.map(w=>w.candles),[24,168,720]); record('Verified Perpl risk comparison','24h / 7d / 30d; 720 closed candles');
+  const btc = await read('/api/perpl-intelligence?marketId=1&hours=6'); assert.equal(btc.body.status, 'AVAILABLE'); assert.equal(btc.body.market.unit, 'BTC'); record('Perpl market and period switch', 'BTC / six hours');
+  for (const url of ['/api/ghost-radar?provider=envio&toBlock=112682099', '/api/kuru-provider-compare?fromBlock=112682099&toBlock=112682099']) assert.equal((await read(url)).body.status, 'CONFIG_REQUIRED');
+  for (const url of ['/api/ghost-radar?minimumTrades=0', '/api/ghost-radar?toBlock=-1', '/api/perpl-intelligence?hours=1', '/api/perpl-intelligence?marketId=https://evil.invalid']) assert.equal((await read(url)).status, 400);
+  record('API boundaries and missing Envio authentication');
+  await fs.writeFile(path.join(output, 'verified-provider-captures.json'), JSON.stringify({ capturedAt: new Date().toISOString(), automatic: automatic.body, preset: preset.body, perpl: perpl.body, btc: btc.body, long: long.body }, null, 2));
+  await api.close();
+  for (const [locale, width, height] of [['en',1440,1000],['es',1440,1000],['en',390,844],['es',390,844],['es',820,1000],['es',320,800]]) {
+    const es = locale === 'es';
+    const context = await browser.newContext({ viewport: { width, height }, acceptDownloads: true });
+    await context.addInitScript(l => {
+      localStorage.setItem('ghost-locale', l);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { window.__sharedCase = text; } }, configurable: true });
+    }, locale);
+    const page = await context.newPage(); page.on('pageerror', e => errors.push(`${locale}/${width}: ${e.message}`));
+    const requests = []; page.on('request', r => { if (r.url().includes('/api/')) requests.push(r.url()); });
+    // Layout tests replay captured REAL provider responses. Error scenarios are browser-only below.
+    await page.route('**/api/ghost-radar?*', r => r.fulfill({ status: 200, json: preset.body }));
+    await page.route('**/api/perpl-intelligence?*', r => r.fulfill({ status: 200, json: new URL(r.request().url()).searchParams.get('marketId')==='1' ? btc.body : new URL(r.request().url()).searchParams.get('hours')==='720' ? long.body : perpl.body }));
+    await page.goto(base); await page.locator('.gm-app[data-hydrated=true]').waitFor();
+    await page.waitForFunction(l => document.documentElement.lang === l, locale);
+    assert.equal(requests.length, 0, 'Overview has no provider calls');
+    await page.getByRole('button', { name: es ? 'Ghost Radar · Encontrar una investigación' : 'Ghost Radar · Find an Investigation', exact: true }).click();
+    await page.locator('.radar-case-details').waitFor(); assert.equal(await page.locator('.ghost-cases > button').count(), preset.body.cases.filter(c=>c.category==='ACTIVE').length); assert.equal(await page.locator('.radar-quiet').getAttribute('open'),null); assert.equal(await page.locator('.ghost-cases .ghost-case-button').count(),6); assert.equal((await page.locator('.radar-case-details').innerText()).includes('/100'),false);
+    await page.locator('.radar-timeline button').first().click(); assert.equal(await page.locator('.radar-timeline button[aria-pressed=true]').count(), 1);
+    await page.locator('.ghost-cases > button').first().click();
+    const c = preset.body.cases[0];
+    const quietIndex=[...preset.body.cases].sort((a,b)=>a.evidence.window.firstBlock-b.evidence.window.firstBlock).findIndex(c=>c.category==='QUIET'); if(quietIndex>=0)assert.equal(await page.locator('.radar-timeline i').nth(quietIndex).evaluate(e=>e.getBoundingClientRect().height),0);
+    assert.ok((await page.locator('.radar-case-details').innerText()).includes(String(c.evidence.window.firstBlock)));
+    assert.ok((await page.locator('.case-contributors a').first().getAttribute('href')).includes(c.evidence.trades[0].transactionHash));
+    await page.getByRole('button', { name: es ? 'Copiar enlace del caso' : 'Copy case link', exact: true }).click();
+    const shared = await page.evaluate(() => window.__sharedCase); assert.equal(new URL(shared).searchParams.get('fromBlock'), String(c.evidence.window.firstBlock));
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: es ? 'Exportar caso Ghost' : 'Export Ghost Case', exact: true }).click()]);
+    const exported = JSON.parse(await fs.readFile(await download.path(), 'utf8')); assert.equal(exported.schema, 'ghost-case/v2'); assert.equal(exported.evidence.trades[0].transactionHash, c.evidence.trades[0].transactionHash);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Radar has no document overflow');
+    await page.screenshot({ path: path.join(output, `radar-${locale}-${width}.png`), fullPage: true });
+    await page.getByRole('button', { name: es ? 'Comparar con otra ventana' : 'Compare with another window', exact: true }).click();
+    await page.locator('.research-comparison-grid').waitFor(); assert.equal(await page.locator('.comparison-window').count(), 2);
+    await page.locator('.provider-verification > summary').click();
+    await page.getByRole('button', { name: es ? 'Comparar RPC ↔ Envio' : 'Compare RPC ↔ Envio', exact: true }).click();
+    await page.locator('.provider-verification').getByText('CONFIG_REQUIRED', { exact: true }).waitFor();
+    const nav = page.locator(width <= 980 ? '.mobile-bottom-nav' : '.gm-header > nav');
+    await nav.getByRole('button', { name: es ? 'Investigación en vivo' : 'Live Investigation', exact: true }).click();
+    await page.getByRole('heading', { name: es ? 'Elige una operación' : 'Choose an operation', exact: true }).waitFor();
+    await nav.getByRole('button', { name: 'Perpl', exact: true }).click();
+    await page.locator('.perpl-metrics').waitFor();
+    assert.equal(await page.locator('.perpl-metrics').evaluate(e => getComputedStyle(e).display), 'grid', 'Perpl CSS must be loaded');
+    assert.equal(await page.locator('.perpl-chart circle').count(), 24);
+    await page.locator('.perpl-chart circle').first().focus(); await page.keyboard.press('Enter');
+    assert.ok((await page.locator('.perpl-candle-detail').innerText()).includes(es ? 'Apertura de vela' : 'Candle opens'));
+    await page.locator('.perpl-spot-context').waitFor(); assert.ok((await page.locator('.perpl-spot-context').innerText()).includes('USDC'));
+    const [perplExport] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: es ? 'Exportar evidencia Perpl' : 'Export Perpl evidence', exact: true }).click()]);
+    const perplJson=JSON.parse(await fs.readFile(await perplExport.path(),'utf8')); assert.equal(perplJson.market.unit,'MON');assert.equal(perplJson.risk.findings.length,6);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Perpl has no document overflow');
+    await page.screenshot({ path: path.join(output, `perpl-${locale}-${width}.png`), fullPage: true });
+    await page.getByRole('button',{name:es?'Cargar 30d para comparar':'Load 30d for comparison',exact:true}).click();
+    await page.locator('.risk-temporal tbody tr[data-hours=\"720\"]').getByText(es?'720/720 · completa':'720/720 · complete',{exact:true}).waitFor();
+    assert.equal(await page.locator('.perpl-chart circle').count(),720);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Risk comparison must not overflow the document');
+    await page.screenshot({path:path.join(output,`risk-${locale}-${width}.png`),fullPage:true});
+    await page.locator('.perpl-controls select').first().selectOption('1'); await page.locator('.perpl-metrics').waitFor();
+    assert.ok((await page.locator('.perpl-metrics').innerText()).includes('BTC'));
+    if (width <= 980) {
+      await page.locator('.mobile-legacy-menu > summary').click();
+      assert.deepEqual(await page.locator('.mobile-primary-nav > button > span').evaluateAll(elements => elements.filter(e => e.scrollWidth>e.clientWidth+1||e.scrollHeight>e.clientHeight+1).map(e=>e.textContent)), [], 'Navigation labels must remain complete');
+      const legacy = page.locator('.mobile-legacy-menu').getByRole('button', { name: es ? 'Inicio BNB' : 'BNB Home', exact: true });
+      assert.equal(await legacy.evaluate(e => { const r=e.getBoundingClientRect(); const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2); return e===hit || e.contains(hit); }), true, 'Legacy menu must be clickable outside the scroll strip');
+      await page.locator('.mobile-legacy-menu > summary').click();
+    }
+    assert.equal(requests.some(url => /bnb-evidence|binance-|live-evidence|ghost-guardian/.test(url)), false);
+    record(`Radar / timeline / export / share / compare / provider blocker / Perpl / keyboard / navigation ${locale}/${width}`);
+    if (locale === 'en' && width === 1440) {
+      const reproduction = await context.newPage(); await reproduction.goto(shared); await reproduction.locator('.research-trade-list > button').first().waitFor();
+      assert.equal(await reproduction.locator('.research-trade-list > button').count(), c.evidence.trades.length); record('Shared case repro queries actual historical RPC'); await reproduction.close();
+    }
+    await context.close();
+  }
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } }); const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
+  await page.route('**/api/ghost-radar?*', r => r.fulfill({ status: 503, json: { status: 'UNAVAILABLE', error: 'PROVIDER_HTTP_429', cases: [] } }));
+  await page.goto(base); await page.locator('.gm-app[data-hydrated=true]').waitFor(); await page.locator('.mobile-bottom-nav').getByRole('button', { name: 'Ghost Radar', exact: true }).click();
+  await page.getByRole('alert').waitFor(); assert.ok((await page.getByRole('alert').innerText()).includes('PROVIDER_HTTP_429')); assert.equal(await page.locator('.ghost-cases').count(), 0);
+  await page.unroute('**/api/ghost-radar?*');
+  let release; const held = new Promise(resolve => { release=resolve; });
+  await page.route('**/api/ghost-radar?*', async r => { await held; await r.fulfill({ status: 200, json: preset.body }); });
+  await page.getByRole('button', { name: 'Find an Investigation', exact: true }).click();
+  await page.getByText('Still scanning real provider logs. Deadline: 30 seconds.', { exact: true }).waitFor(); release(); await page.locator('.ghost-cases').waitFor(); record('Radar rate-limit / no synthetic fallback / slow recovery');
+  const partial = { ...perpl.body, status: 'PARTIAL', funding: undefined };
+  await page.route('**/api/perpl-intelligence?*', r => r.fulfill({ status: 200, json: partial }));
+  await page.locator('.mobile-bottom-nav').getByRole('button', { name: 'Perpl', exact: true }).click(); await page.getByText('Funding endpoint unavailable.', { exact: true }).waitFor(); await page.locator('.perpl-metrics').waitFor(); record('Perpl partial recovery keeps independent sections');
+  await page.unroute('**/api/perpl-intelligence?*'); await page.route('**/api/perpl-intelligence?*', r => r.fulfill({ status: 503, json: { status: 'UNAVAILABLE', markets: [], error: 'HTTP_429' } }));
+  await page.getByRole('button', { name: 'Refresh snapshot', exact: true }).click(); await page.getByRole('alert').waitFor(); assert.equal(await page.locator('.perpl-metrics').count(), 0); record('Perpl unavailable / no invented prices');
+  await context.close(); assert.deepEqual(errors, []); record('No new browser runtime errors');
+  await fs.writeFile(path.join(output, 'verification.json'), JSON.stringify({ checkedAt: new Date().toISOString(), base, checks, errors }, null, 2));
+} finally { await browser.close(); }

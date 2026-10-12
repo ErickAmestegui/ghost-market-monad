@@ -42,7 +42,7 @@ export type HyperSyncQueryResponse = {
   } | null;
 };
 
-export type KuruReplayTrade = KuruTrade & { blockHash: string };
+export type KuruReplayTrade = KuruTrade & { blockHash: string; rawData: string; rawTopics: string[] };
 
 const HASH = /^0x[0-9a-f]{64}$/i;
 
@@ -83,7 +83,7 @@ export function decodeHyperSyncKuruLog(log: HyperSyncLog): KuruReplayTrade {
     transactionHash: log.transaction_hash ?? "",
     removed: log.removed ?? false,
   };
-  return { ...decodeKuruTradeLog(raw), blockHash: log.block_hash.toLowerCase() };
+  return { ...decodeKuruTradeLog(raw), blockHash: log.block_hash.toLowerCase(), rawData: raw.data, rawTopics: raw.topics };
 }
 
 export function decodeHyperSyncKuruPage(payload: HyperSyncQueryResponse) {
@@ -96,6 +96,8 @@ export function decodeHyperSyncKuruPage(payload: HyperSyncQueryResponse) {
   for (const block of payload.data.blocks) {
     const number = parseHyperSyncQuantity(block.number ?? "", "block.number");
     if (!block.hash || !HASH.test(block.hash)) throw new Error("HyperSync block is missing a valid hash");
+    const existing = blockHashes.get(number);
+    if (existing && existing !== block.hash.toLowerCase()) throw new Error('CONTRADICTORY_BLOCK_HASH');
     blockHashes.set(number, block.hash.toLowerCase());
   }
   const trades = payload.data.logs.map(decodeHyperSyncKuruLog);
@@ -112,18 +114,34 @@ export async function readEnvioReplay(fromBlock: number, toBlock: number, token:
   const deadline = AbortSignal.timeout(25000);
   let cursor = fromBlock, pages = 0, archiveHeight: number | null = null, providerExecutionMs = 0;
   const trades: KuruReplayTrade[] = [];
-  const keys = new Set<string>();
+  const keys = new Map<string, KuruReplayTrade>();
   while (cursor < query.to_block) {
     if (pages >= KURU_REPLAY_MAX_PAGES) throw new Error('PAGINATION_LIMIT');
     const response = await fetcher(`${ENVIO_MONAD_HYPERSYNC_URL}/query`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ ...query, from_block: cursor }), cache: 'no-store', signal: deadline });
     if (!response.ok) throw new Error(`PROVIDER_HTTP_${response.status}`);
-    const payload = await response.json() as HyperSyncQueryResponse;
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('EMPTY_RESPONSE');
+    const decoder = new TextDecoder(); let bytes = 0, text = '';
+    while (true) {
+      const part = await reader.read(); if (part.done) break;
+      bytes += part.value.length;
+      if (bytes > 8000000) { await reader.cancel(); throw new Error('RESPONSE_LIMIT'); }
+      text += decoder.decode(part.value, { stream: true });
+    }
+    text += decoder.decode();
+    const payload = JSON.parse(text) as HyperSyncQueryResponse;
     const page = decodeHyperSyncKuruPage(payload);
+    if (page.archiveHeight != null && page.archiveHeight < toBlock) throw new Error('INDEXER_BEHIND');
     if (page.nextBlock <= cursor || page.nextBlock > query.to_block) throw new Error('INVALID_PAGINATION');
     for (const trade of page.trades) {
       const key = `${trade.transactionHash}:${trade.logIndex}`;
-      if (trade.blockNumber < cursor || trade.blockNumber >= page.nextBlock || keys.has(key)) throw new Error('INVALID_PAGE_EVIDENCE');
-      keys.add(key); trades.push(trade);
+      const existing = keys.get(key);
+      if (existing) {
+        if (JSON.stringify(existing) !== JSON.stringify(trade)) throw new Error('CONTRADICTORY_DUPLICATE');
+        continue;
+      }
+      if (trade.blockNumber < cursor || trade.blockNumber >= page.nextBlock) throw new Error('INVALID_PAGE_EVIDENCE');
+      keys.set(key, trade); trades.push(trade);
     }
     if (trades.length > 5000) throw new Error('EVIDENCE_LIMIT');
     if (payload.total_execution_time != null && (!Number.isFinite(payload.total_execution_time) || payload.total_execution_time < 0)) throw new Error('INVALID_EXECUTION_TIME');

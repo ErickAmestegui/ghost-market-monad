@@ -62,3 +62,28 @@ test('Envio paginates with explicit provider and rejects nonadvancing or oversho
 test('direction and concentration thresholds refer to the observed sample',()=>{
  const a=analyzeKuruFlow([]);assert.equal(a.classification,'INSUFFICIENT');assert.equal(a.largestTradeSharePercent,null);
 });
+
+test('Radar RPC scan returns complete evidence above the display cap while default replay stays capped',async()=>{
+ const mock=mockRpc({logs:Array.from({length:61},(_,i)=>event(i))});
+ const result=await readKuruRpc({range:{firstBlock:100,lastBlock:100},fetcher:mock.fetcher,maxTrades:5000});
+ assert.equal(result.trades?.length,61);assert.equal(result.window?.capped,false);
+ for(const maxTrades of [0,5001,1.5])await assert.rejects(readKuruRpc({fetcher:mock.fetcher,maxTrades}),/INVALID_EVIDENCE_LIMIT/);
+});
+
+const envioLog=(index=0)=>({block_hash:hash('b'),block_number:100,log_index:index,transaction_hash:hash('a'),address:KURU_MON_USDC_MARKET,topic0:KURU_TRADE_TOPIC,data:event(index).data});
+const envioPage=(next:number,logs:ReturnType<typeof envioLog>[])=>({next_block:next,archive_height:1000,data:{logs,blocks:[{number:100,hash:hash('b')}]}});
+test('Envio deduplicates identical event repeats across pages and rejects contradictory duplicates',async()=>{
+ let page=0;
+ const result=await readEnvioReplay(100,101,'test-token',async()=>Response.json(envioPage(++page===1?101:102,[envioLog()])));
+ assert.equal(result.trades.length,1);assert.equal(result.pages,2);
+ assert.equal(result.trades[0].rawData,envioLog().data);
+ await assert.rejects(readEnvioReplay(100,100,'test-token',async()=>Response.json(envioPage(101,[envioLog(),{...envioLog(),data:envioLog().data.replace(word(25000000000000000n),word(25000000000000001n))}]))),/CONTRADICTORY_DUPLICATE/);
+ await assert.rejects(readEnvioReplay(100,100,'test-token',async()=>Response.json(envioPage(101,[envioLog(),{...envioLog(),block_hash:hash('c')}]))) ,/hash mismatch/);
+ await assert.rejects(readEnvioReplay(100,100,'test-token',async()=>Response.json(envioPage(101,[envioLog(),{...envioLog(),data:envioLog().data.replace(word(25000000000000000n),word(26000000000000000n))}]))),/CONTRADICTORY_DUPLICATE/);
+});
+test('Envio rejects lagging archive coverage, conflicting joined hashes, response limits and rate limits',async()=>{
+ await assert.rejects(readEnvioReplay(100,101,'test-token',async()=>Response.json({...envioPage(102,[]),archive_height:100})),/INDEXER_BEHIND/);
+ assert.throws(()=>decodeHyperSyncKuruPage({...envioPage(101,[]),data:{logs:[],blocks:[{number:100,hash:hash('b')},{number:100,hash:hash('c')}]}}),/CONTRADICTORY_BLOCK_HASH/);
+ await assert.rejects(readEnvioReplay(100,100,'test-token',async()=>new Response('x'.repeat(8000001))),/RESPONSE_LIMIT/);
+ await assert.rejects(readEnvioReplay(100,100,'test-token',async()=>new Response('',{status:429})),/PROVIDER_HTTP_429/);
+});

@@ -36,7 +36,9 @@ export function safeInvestigationError(error: unknown) {
   if (error instanceof Error && /timeout|abort/i.test(error.name)) return 'PROVIDER_TIMEOUT';
   return 'PROVIDER_OR_EVIDENCE_ERROR';
 }
-export async function readKuruRpc(options: { range?: { firstBlock: number; lastBlock: number }; rpcUrl?: string; fetcher?: typeof fetch; now?: number }): Promise<Investigation> {
+export async function readKuruRpc(options: { range?: { firstBlock: number; lastBlock: number }; rpcUrl?: string; fetcher?: typeof fetch; now?: number; maxTrades?: number }): Promise<Investigation> {
+  const maxTrades = options.maxTrades ?? KURU_MAX_TRADES;
+  if (!Number.isSafeInteger(maxTrades) || maxTrades < 1 || maxTrades > 5000) throw new Error('INVALID_EVIDENCE_LIMIT');
   const fetcher = options.fetcher ?? fetch;
   const rpcUrl = options.rpcUrl?.trim() || MONAD_PUBLIC_RPC_URL;
   if (new URL(rpcUrl).protocol !== 'https:') throw new Error('INVALID_RPC_CONFIG');
@@ -68,10 +70,10 @@ export async function readKuruRpc(options: { range?: { firstBlock: number; lastB
     if (!/^0x[0-9a-f]{64}$/i.test(log.blockHash)) throw new Error('INVALID_BLOCK_HASH');
     return { ...decodeKuruTradeLog(log), blockHash: log.blockHash.toLowerCase(), rawData: log.data, rawTopics: log.topics };
   }), range.firstBlock, range.lastBlock);
-  const trades = decoded.slice(-KURU_MAX_TRADES);
+  const trades = decoded.slice(-maxTrades);
   const now = options.now ?? Date.now();
   const ageSeconds = Math.max(0, Math.round((now - rpcHexToSafeNumber(head.timestamp, 'timestamp') * 1000) / 1000));
-  return { status: options.range ? 'REPLAYED' : ageSeconds <= 60 ? 'LIVE' : 'STALE', requestId: crypto.randomUUID(), observedAt: new Date(now).toISOString(), mode: options.range ? 'HISTORICAL' : 'LIVE', provider: 'Monad JSON-RPC', window: { ...range, blockCount: range.lastBlock - range.firstBlock + 1, ageSeconds, decodedTradeCount: decoded.length, returnedTradeCount: trades.length, capped: decoded.length > trades.length }, analysis: analyzeKuruFlow(trades), trades: [...trades].reverse(), warnings: ['RPC event evidence; no claim of finality. Metrics use the returned sample of at most 60 trades.'] };
+  return { status: options.range ? 'REPLAYED' : ageSeconds <= 60 ? 'LIVE' : 'STALE', requestId: crypto.randomUUID(), observedAt: new Date(now).toISOString(), mode: options.range ? 'HISTORICAL' : 'LIVE', provider: 'Monad JSON-RPC', window: { ...range, blockCount: range.lastBlock - range.firstBlock + 1, ageSeconds, decodedTradeCount: decoded.length, returnedTradeCount: trades.length, capped: decoded.length > trades.length }, analysis: analyzeKuruFlow(trades), trades: [...trades].reverse(), warnings: [`RPC event evidence; no claim of finality. Metrics use at most ${maxTrades} returned events.`] };
 }
 export function compareInvestigations(left: Investigation, right: Investigation) {
   if (!left.window || !right.window || !left.analysis || !right.analysis || left.window.capped || right.window.capped) return null;

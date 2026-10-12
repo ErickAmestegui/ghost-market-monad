@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 const DOCUMENTS = [
+  ["championship", "Championship readiness", "Radar, real Perpl evidence, tests, limitations and honest integration readiness."],
   ["readme", "README", "Purpose, setup, verification commands, statuses and current limitations."],
   ["envio", "Envio evaluation", "Monad 143 support, conditional historical adapter and current token blocker."],
   ["architecture", "Architecture", "Trust boundaries, live evidence pipeline, quality gates and security model."],

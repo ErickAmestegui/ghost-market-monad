@@ -28,7 +28,7 @@ import { HistoricalReplay } from "@/ui/historical-replay";
 import { EvidenceRoom } from "@/ui/evidence-room";
 import { KuruFlowIntelligence, type InvestigationView } from "@/ui/kuru-flow-intelligence";
 
-type Section = "home" | "historical" | "explorer" | "legacy-home" | "monad" | "live" | "lens" | "guardian" | "pulse" | "replay" | "judge" | "demo" | "learn" | "about";
+type Section = "home" | "radar" | "perpl" | "historical" | "explorer" | "legacy-home" | "monad" | "live" | "lens" | "guardian" | "pulse" | "replay" | "judge" | "demo" | "learn" | "about";
 type DisplayMode = "simple" | "pro";
 type DemoPanel = "brain" | "council" | "scenarios" | "research" | "pulse";
 type DataState = "LIVE" | "CACHED" | "REJECTED" | "UNAVAILABLE" | "ERROR" | "SIMULATED" | "DEMO" | "LOADING";
@@ -41,6 +41,8 @@ const ASSETS: Array<{ symbol: SymbolKey; token: string; company: string; note: {
 
 const NAV: Array<{ id: Section; icon: typeof Home; en: string; es: string }> = [
   { id: "home", icon: Home, en: "Overview", es: "Portada" },
+  { id: "radar", icon: Radar, en: "Ghost Radar", es: "Ghost Radar" },
+  { id: "perpl", icon: RadioTower, en: "Perpl", es: "Perpl" },
   { id: "historical", icon: RefreshCw, en: "Historical Replay", es: "Replay histórico" },
   { id: "explorer", icon: Search, en: "Evidence Explorer", es: "Explorador de evidencia" },
   { id: "legacy-home", icon: Home, en: "BNB Home", es: "Inicio BNB" },
@@ -56,7 +58,7 @@ const NAV: Array<{ id: Section; icon: typeof Home; en: string; es: string }> = [
   { id: "about", icon: Info, en: "About", es: "Acerca de" },
 ];
 
-const PRIMARY_NAV: Section[] = ["home", "monad", "historical", "explorer"];
+const PRIMARY_NAV: Section[] = ["home", "radar", "monad", "historical", "explorer", "perpl"];
 const SECONDARY_NAV: Section[] = ["legacy-home", "live", "guardian", "replay", "judge", "lens", "pulse", "demo", "learn", "about"];
 
 const t = (locale: Locale, en: string, es: string) => locale === "en" ? en : es;
@@ -88,6 +90,7 @@ export default function GhostMarket() {
       if (storedLocale === "en" || storedLocale === "es") setLocale(storedLocale);
       if (storedMode === "simple" || storedMode === "pro") setDisplayMode(storedMode);
       if (storedCalm === "true" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) setCalmMode(true);
+      if (new URLSearchParams(window.location.search).get("view") === "historical") setSection("historical");
       setHydrated(true);
     });
     return () => window.cancelAnimationFrame(frameId);
@@ -106,7 +109,7 @@ export default function GhostMarket() {
     <Header section={section} locale={locale} displayMode={displayMode} calmMode={calmMode} onNavigate={navigate} onLocale={changeLocale} onMode={changeMode} onCalm={changeCalm} />
     {!monadSection && <ComprehensionProgress locale={locale} section={section} liveStep={liveStep} demoChapter={demoChapter} />}
     {!monadSection && <div className="mode-brief" role="status"><SlidersHorizontal /><span>{displayMode === "simple" ? t(locale, "SIMPLE · Guided essentials; every risk remains visible", "SIMPLE · Esenciales guiados; todos los riesgos siguen visibles") : t(locale, "PRO · Full sources, request IDs and quality gates", "PRO · Fuentes, request IDs y controles de calidad completos")}</span></div>}
-    <div className={`chain-scope ${monadSection ? "monad" : "legacy"}`}><RadioTower /><span>{monadSection ? t(locale, "MONAD MAINNET · VERIFIED EVENT RESEARCH", "MONAD MAINNET · INVESTIGACIÓN DE EVENTOS") : t(locale, "INHERITED BNB MODULE · SEPARATE DATA SCOPE", "MÓDULO BNB HEREDADO · DATOS SEPARADOS")}</span></div>
+    <div className={`chain-scope ${monadSection ? "monad" : "legacy"}`}><RadioTower /><span>{section === "perpl" ? t(locale, "MONAD MAINNET · PERPL PUBLIC MARKET DATA", "MONAD MAINNET · DATOS PÚBLICOS PERPL") : monadSection ? t(locale, "MONAD MAINNET · VERIFIED EVENT RESEARCH", "MONAD MAINNET · INVESTIGACIÓN DE EVENTOS") : t(locale, "INHERITED BNB MODULE · SEPARATE DATA SCOPE", "MÓDULO BNB HEREDADO · DATOS SEPARADOS")}</span></div>
     {section === "legacy-home" && <HomeExperience locale={locale} onInvestigate={() => navigate("guardian")} onReplay={() => navigate("replay")} onJudge={() => navigate("judge")} />}
     {monadSection && <ModuleErrorBoundary resetKey={section} fallback={<div className="research-state" role="alert">{t(locale, "This research view could not render. Open another section and retry.", "No se pudo mostrar esta vista. Abre otra sección y reintenta.")}</div>}><KuruFlowIntelligence locale={locale} view={section === "monad" ? "live" : section as InvestigationView} onNavigate={(next) => navigate(next === "live" ? "monad" : next)} /></ModuleErrorBoundary>}
     {section === "live" && <LiveJourney locale={locale} displayMode={displayMode} step={liveStep} symbol={symbol} loading={loading} evidence={evidence} binance={binance} rwa={rwa} walletSkill={walletSkill} live={live} onStep={setLiveStep} onSelect={chooseAsset} onReload={reload} onDemo={startDemo} />}
@@ -305,5 +308,5 @@ function ScoreLesson({ name, copy }: { name: string; copy: string }) { return <d
 function JudgeCard({ title, text }: { title: string; text: string }) { return <article><span>{title}</span><p>{text}</p></article>; }
 function GhostGlyph() { return <span className="ghost-glyph" aria-hidden="true"><i /><i /></span>; }
 function StateIcon({ status }: { status: DataState }) { if (status === "LIVE" || status === "CACHED") return <CheckCircle2 className="state-icon" />; if (status === "REJECTED") return <TriangleAlert className="state-icon" />; if (status === "ERROR") return <CircleX className="state-icon" />; return <CircleDashed className="state-icon" />; }
-function MobileNav({ section, locale, onNavigate }: { section: Section; locale: Locale; onNavigate: (section: Section) => void }) { return <nav className="mobile-bottom-nav" aria-label={t(locale, "Mobile navigation", "Navegación móvil")}>{PRIMARY_NAV.map(id => NAV.find(item => item.id === id)!).map((item) => { const Icon = item.icon; return <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => onNavigate(item.id)}><Icon /><span>{locale === "en" ? item.en : item.es}</span></button>; })}<details className="mobile-legacy-menu"><summary><ChevronDown /><span>{t(locale, "More", "Más")}</span></summary><div><strong>{t(locale, "BNB legacy · separate scope", "Legado BNB · ámbito separado")}</strong>{NAV.filter(item => SECONDARY_NAV.includes(item.id)).map(item => <button key={item.id} onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onNavigate(item.id); }}>{locale === "en" ? item.en : item.es}</button>)}</div></details></nav>; }
+function MobileNav({ section, locale, onNavigate }: { section: Section; locale: Locale; onNavigate: (section: Section) => void }) { return <nav className="mobile-bottom-nav" aria-label={t(locale, "Mobile navigation", "Navegación móvil")}><div className="mobile-primary-nav">{PRIMARY_NAV.map(id => NAV.find(item => item.id === id)!).map((item) => { const Icon = item.icon; return <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => onNavigate(item.id)}><Icon /><span>{locale === "en" ? item.en : item.es}</span></button>; })}</div><details className="mobile-legacy-menu"><summary><ChevronDown /><span>{t(locale, "More", "Más")}</span></summary><div><strong>{t(locale, "BNB legacy · separate scope", "Legado BNB · ámbito separado")}</strong>{NAV.filter(item => SECONDARY_NAV.includes(item.id)).map(item => <button key={item.id} onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onNavigate(item.id); }}>{locale === "en" ? item.en : item.es}</button>)}</div></details></nav>; }
 function chapterCopy(locale: Locale, chapter: number) { const en = ["The traditional reference stops updating.", "Three simulated venues remain active.", "Their prices begin to separate from the frozen reference.", "Ghost compares agreement, freshness, spread and liquidity.", "A controlled weak-market price tests the engine.", "Quality penalties lower the outlier’s influence.", "The next simulated traditional reference arrives.", "Ghost separates what worked from what remained unknown."]; const es = ["La referencia tradicional deja de actualizarse.", "Tres venues simulados permanecen activos.", "Sus precios comienzan a separarse de la referencia congelada.", "Ghost compara acuerdo, frescura, spread y liquidez.", "Un precio controlado de mercado débil pone a prueba el motor.", "Las penalizaciones de calidad reducen la influencia del outlier.", "Llega la siguiente referencia tradicional simulada.", "Ghost separa lo que funcionó de lo que quedó sin respuesta."]; return (locale === "en" ? en : es)[chapter]; }
