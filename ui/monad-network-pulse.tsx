@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
-import { Activity, Blocks, ExternalLink, Info, RadioTower, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Activity, Blocks, ChevronDown, ExternalLink, Info, RadioTower, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { Locale } from "@/data/types";
 import { KuruFlowIntelligence } from "@/ui/kuru-flow-intelligence";
 
@@ -63,16 +62,29 @@ export function MonadNetworkPulse({ locale }: { locale: Locale }) {
   }, [refreshToken]);
 
   const status = loading ? "LOADING" : data?.status ?? "UNAVAILABLE";
-  return <section className="page-shell monad-pulse-page">
-    <div className="monad-pulse-hero">
-      <div>
-        <p className="eyebrow">MONAD NETWORK PULSE · {tx(locale, "REAL RPC EVIDENCE", "EVIDENCIA RPC REAL")}</p>
-        <h1>{tx(locale, "See the chain breathe.", "Mirá respirar la cadena.")}</h1>
-        <p>{tx(locale, "Ghost reads a short window of real Monad mainnet blocks, counts their transactions and explains what changed. Observation only—no wallet, signature or trade.", "Ghost lee una ventana corta de bloques reales de Monad mainnet, cuenta sus transacciones y explica qué cambió. Solo observación: sin wallet, firma ni operación.")}</p>
-        <div className="read-only-strip"><ShieldCheck />READ ONLY · 0 {tx(locale, "transactions submitted", "transacciones enviadas")}</div>
-      </div>
-      <div className="monad-companion"><div className="monad-orbit" aria-hidden="true" /><Image src="/ghost-companion.png" alt={tx(locale, "Ghost observing Monad blocks", "Ghost observando bloques de Monad")} width={280} height={280} priority /><span><RadioTower />{tx(locale, "Listening to Monad", "Escuchando Monad")}</span></div>
-    </div>
+  return <section className="page-shell monad-markets-page">
+    <KuruFlowIntelligence locale={locale} />
+
+    <details className="monad-pulse-secondary">
+      <summary>
+        <div className="monad-pulse-summary-copy">
+          <span>MONAD NETWORK PULSE · {tx(locale, "NETWORK CONTEXT", "CONTEXTO DE RED")}</span>
+          <h2>{tx(locale, "See the chain behind the market.", "Mirá la red detrás del mercado.")}</h2>
+          <p>{tx(locale, "A compact, read-only view of the blocks supporting the live market evidence above.", "Una vista compacta y de solo lectura de los bloques que respaldan la evidencia de mercado anterior.")}</p>
+        </div>
+        <div className="monad-pulse-summary-state">
+          <span className={`status-badge status-${status.toLowerCase()}`}><i />{status}</span>
+          {data?.signal && <strong>{data.signal.trend} · {data.signal.density}</strong>}
+          {data?.latestBlock && <small>#{data.latestBlock.number.toLocaleString("en-US")}</small>}
+          <ChevronDown />
+        </div>
+      </summary>
+
+      <div className="monad-pulse-content">
+        <div className="monad-pulse-intro">
+          <div><RadioTower /><p>{tx(locale, "Ghost samples 12 real Monad mainnet blocks and explains observed activity without treating transaction count as price, value or intent.", "Ghost toma una muestra de 12 bloques reales de Monad mainnet y explica la actividad observada sin tratar la cantidad de transacciones como precio, valor o intención.")}</p></div>
+          <div className="read-only-strip"><ShieldCheck />READ ONLY · 0 {tx(locale, "transactions submitted", "transacciones enviadas")}</div>
+        </div>
 
     <div className="monad-toolbar">
       <span className={`status-badge status-${status.toLowerCase()}`}><i />{status}</span>
@@ -130,6 +142,7 @@ export function MonadNetworkPulse({ locale }: { locale: Locale }) {
         {data.source && <a href={data.source.documentation} target="_blank" rel="noreferrer">{tx(locale, "Monad network documentation", "Documentación de la red Monad")} <ExternalLink /></a>}
       </details>
     </>}
-    <KuruFlowIntelligence locale={locale} />
+      </div>
+    </details>
   </section>;
 }

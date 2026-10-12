@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Activity, ArrowDownRight, ArrowUpRight, ExternalLink, Fingerprint, RefreshCw, Scale, ShieldAlert, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { Locale } from "@/data/types";
@@ -50,12 +51,15 @@ export function KuruFlowIntelligence({ locale }: { locale: Locale }) {
   const maxTrade = Math.max(...(data?.trades?.map((trade) => trade.sizeMon) ?? [1]), 1);
   return <section className="kuru-lab" aria-labelledby="kuru-flow-title">
     <header className="kuru-lab-header">
-      <div>
+      <div className="kuru-title-copy">
         <p className="eyebrow">KURU FLOW FORENSICS · {copy(locale, "REAL MARKET EVENTS", "EVENTOS REALES DE MERCADO")}</p>
-        <h2 id="kuru-flow-title">{copy(locale, "What actually traded?", "¿Qué se operó realmente?")}</h2>
+        <h1 id="kuru-flow-title">{copy(locale, "What actually traded?", "¿Qué se operó realmente?")}</h1>
         <p>{copy(locale, "Ghost decodes the official MON/USDC order book’s Trade events and separates executed flow from speculation.", "Ghost decodifica los eventos Trade del order book oficial MON/USDC y separa el flujo ejecutado de la especulación.")}</p>
       </div>
-      <div className="kuru-lab-actions"><span className={`status-badge status-${status.toLowerCase()}`}><i />{status}</span><button className="secondary-action" onClick={() => { setLoading(true); setRefreshToken((value) => value + 1); }} disabled={loading}><RefreshCw />{copy(locale, "Refresh trades", "Actualizar operaciones")}</button></div>
+      <div className="kuru-hero-side">
+        <div className="kuru-hero-mark"><div aria-hidden="true" /><Image src="/ghost-companion.png" alt={copy(locale, "Ghost investigating Kuru market flow", "Ghost investigando el flujo de mercado de Kuru")} width={190} height={190} priority /><span><Fingerprint />{copy(locale, "LIVE ORDER FLOW", "FLUJO LIVE DE ÓRDENES")}</span></div>
+        <div className="kuru-lab-actions"><span className={`status-badge status-${status.toLowerCase()}`}><i />{status}</span><button className="secondary-action" onClick={() => { setLoading(true); setRefreshToken((value) => value + 1); }} disabled={loading}><RefreshCw />{copy(locale, "Refresh trades", "Actualizar operaciones")}</button></div>
+      </div>
     </header>
 
     {loading && !data && <div className="kuru-state"><Activity /><strong>{copy(locale, "Scanning verified Kuru events…", "Buscando eventos verificados de Kuru…")}</strong></div>}
