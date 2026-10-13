@@ -6,6 +6,7 @@ import type { Investigation } from '@/lib/monad/kuru-investigation';
 import { PerplRiskInvestigator } from '@/ui/perpl-risk-investigator';
 import { investigatePerpl } from '@/lib/monad/perpl-risk';
 import { PERPL_DOCS, type PerplResult } from '@/lib/monad/perpl-intelligence';
+import { fetchPerplSnapshot, PerplRequestError, samePerplScope, type PerplRequestTrace } from '@/lib/monad/perpl-client';
 const t = (l: Locale, en: string, es: string) => l === 'en' ? en : es;
 const num = (v: number | null | undefined, l: Locale, d = 4) => v == null ? '—' : v.toLocaleString(l === 'en' ? 'en-US' : 'es-BO', { maximumFractionDigits: d });
 const date = (v: number, l: Locale) => new Date(v).toLocaleString(l === 'en' ? 'en-US' : 'es-BO', { dateStyle: 'medium', timeStyle: 'short' });
@@ -15,37 +16,46 @@ export function PerplIntelligence({ locale, spot }: {
 }) {
     const [data, setData] = useState<PerplResult | null>(null), [loading, setLoading] = useState(true), [marketId, setMarketId] = useState(''), [hours, setHours] = useState('24'), [selected, setSelected] = useState<number | null>(null);
     const controller = useRef<AbortController | null>(null);
+    const previous = useRef<{data:PerplResult;hours:string;requestedId:string}|null>(null);
+    const mounted = useRef(true);
+    const [requestError,setRequestError] = useState(''), [slow,setSlow] = useState(false), [traces,setTraces] = useState<PerplRequestTrace[]>([]);
     const load = useCallback(async (id: string, period: string) => {
-        controller.current?.abort();
+        controller.current?.abort('SUPERSEDED');
         const abort = new AbortController();
         controller.current = abort;
         setLoading(true);
-        setData(null);
+        const retain = samePerplScope(previous.current,id,period);
+        setData(retain?previous.current!.data:null);
+        setRequestError(''); setSlow(false);
         setSelected(null);
+        const slowTimer=setTimeout(()=>{if(!abort.signal.aborted)setSlow(true);},4000);
         try {
-            const query = new URLSearchParams({ hours: period });
-            if (id)
-                query.set('marketId', id);
-            const r = await fetch('/api/perpl-intelligence?' + query, { cache: 'no-store', signal: AbortSignal.any([abort.signal, AbortSignal.timeout(23000)]) });
-            const body = await r.json() as PerplResult;
-            if (!['AVAILABLE', 'PARTIAL', 'UNAVAILABLE'].includes(body.status) || !Array.isArray(body.markets))
-                throw new Error('INVALID_RESPONSE');
-            if (!abort.signal.aborted) {
+            const body = await fetchPerplSnapshot(id,period,{signal:abort.signal,onTrace:trace=>{
+                if(mounted.current)setTraces(old=>[...old.slice(-7),trace]);
+            }});
+            if (!abort.signal.aborted && controller.current===abort) {
                 setData(body);
+                previous.current={data:body,hours:period,requestedId:id};
                 if (body.market)
                     setMarketId(String(body.market.id));
             }
         }
-        catch {
-            if (!abort.signal.aborted)
-                setData({ status: 'UNAVAILABLE', requestId: 'CLIENT_ERROR', observedAt: new Date().toISOString(), source: 'Perpl public API', markets: [], traces: [], error: 'CLIENT_OR_TIMEOUT' });
+        catch (error) {
+            if (!abort.signal.aborted && controller.current===abort) {
+                const code=error instanceof PerplRequestError?error.code:'CLIENT_NETWORK_ERROR';
+                setRequestError(code);
+                if(!retain)setData(null);
+            }
         }
         finally {
-            if (!abort.signal.aborted)
+            clearTimeout(slowTimer);
+            if (!abort.signal.aborted && controller.current===abort) {
                 setLoading(false);
+                setSlow(false);
+            }
         }
     }, []);
-    useEffect(() => { const timer = setTimeout(() => { void load('', '24'); }, 0); return () => { clearTimeout(timer); controller.current?.abort(); }; }, [load]);
+    useEffect(() => { mounted.current=true;const timer = setTimeout(() => { void load('', '24'); }, 0); return () => { mounted.current=false;clearTimeout(timer); controller.current?.abort('UNMOUNT'); }; }, [load]);
     const m = data?.market, a = data?.ticker, h = data?.history, b = data?.book, candle = h?.candles.find(c => c.timestamp === selected) ?? h?.candles.at(-1);
     const min = Math.min(...(h?.candles.map(c => c.low) ?? [0])), max = Math.max(...(h?.candles.map(c => c.high) ?? [1]));
     const point = (timestamp: number, close: number) => ({ x: 24 + (timestamp - (h?.from ?? timestamp)) / Math.max(1, (h?.to ?? timestamp) - (h?.from ?? timestamp)) * 568, y: 155 - (close - min) / Math.max(.00000001, max - min) * 130 });
@@ -54,13 +64,13 @@ export function PerplIntelligence({ locale, spot }: {
     const age = a ? Math.max(0, Math.round((Date.parse(data!.observedAt) - a.timestamp) / 1000)) : null;
     const exportData = () => { if (!data)
         return; const url = URL.createObjectURL(new Blob([JSON.stringify({ product: 'Ghost Market / Perpl Market Intelligence', ...data, risk: investigatePerpl(data), methodology: { source: 'Official public REST endpoints', priceUnits: 'Protocol USD-reference prices', volumeUnits: m?.collateral, closedCandlesOnly: true, depth: 'Top 10 levels per side', generativeAI: false } }, null, 2)], { type: 'application/json' })); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `ghost-perpl-${m?.id ?? 'unavailable'}-${hours}h.json`; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
-    return <section className="page-shell perpl-page"><header className="research-heading"><div><p className="eyebrow">PERPL RISK INVESTIGATOR · MONAD 143 · {t(locale, 'PERPETUAL FUTURES', 'FUTUROS PERPETUOS')}</p><h1>{t(locale, 'Investigate perpetual market structure.', 'Investiga la estructura del mercado perpetuo.')}</h1><p>{t(locale, 'Investigate funding, observed volatility, open interest and quoted depth using official public data. No wallet required.', 'Investiga financiación, volatilidad observada, interés abierto y profundidad cotizada con datos públicos oficiales. No requiere wallet.')}</p></div><button className="secondary-action" disabled={loading} onClick={() => void load(marketId, hours)}><RefreshCw />{t(locale, 'Refresh snapshot', 'Actualizar captura')}</button></header>
- <div className="perpl-controls"><label>{t(locale, 'Market', 'Mercado')}<select value={marketId} disabled={loading || !data?.markets.length} onChange={e => { setMarketId(e.target.value); void load(e.target.value, hours); }}>{data?.markets.length ? data.markets.map(m => <option key={m.id} value={m.id}>{m.name} · {m.unit} · {m.isOpen ? t(locale, 'open', 'abierto') : t(locale, 'closed', 'cerrado')}</option>) : <option>{t(locale, 'Loading markets', 'Cargando mercados')}</option>}</select></label><label>{t(locale, 'Closed hourly history', 'Historial horario cerrado')}<select value={hours} disabled={loading} onChange={e => { setHours(e.target.value); void load(marketId, e.target.value); }}><option value="6">6h</option><option value="24">24h</option><option value="168">7d</option><option value="720">30d</option></select></label><span className={`status-badge status-${data?.status === 'AVAILABLE' ? 'live' : 'unavailable'}`}>{loading ? t(locale, 'LOADING', 'CARGANDO') : data?.status ?? 'UNAVAILABLE'}</span></div>
- {loading && <div className="research-state" role="status">{t(locale, 'Reading independent Perpl endpoints…', 'Leyendo endpoints independientes de Perpl…')}</div>}
- {!loading && data?.status === 'UNAVAILABLE' && <div className="research-state research-error" role="alert">{t(locale, 'Perpl did not return usable evidence. No simulated market was shown.', 'Perpl no devolvió evidencia utilizable. No se mostró un mercado simulado.')} <code>{data.error ?? 'PROVIDER_UNAVAILABLE'}</code></div>}
- {!loading && m && <><p className="research-source-note">{t(locale, 'Exchange', 'Exchange')}: <a href={`https://monadscan.com/address/${m.exchange}`} target="_blank" rel="noreferrer">{m.exchange}<ExternalLink /></a> · {m.collateral} {t(locale, 'collateral', 'como colateral')}</p>
+    return <section className="page-shell perpl-page"><header className="research-heading"><div><p className="eyebrow">PERPL RISK INVESTIGATOR · MONAD 143 · {t(locale, 'PERPETUAL FUTURES', 'FUTUROS PERPETUOS')}</p><h1>{t(locale, 'Investigate perpetual market structure.', 'Investiga la estructura del mercado perpetuo.')}</h1><p>{t(locale, 'Investigate funding, observed volatility, open interest and quoted depth using official public data. No wallet required.', 'Investiga financiación, volatilidad observada, interés abierto y profundidad cotizada con datos públicos oficiales. No requiere wallet.')}</p></div><button className="secondary-action" disabled={loading} onClick={() => void load(marketId, hours)}><RefreshCw />{requestError&&!data?t(locale,'Retry snapshot','Reintentar captura'):t(locale, 'Refresh snapshot', 'Actualizar captura')}</button></header>
+ <div className="perpl-controls"><label>{t(locale, 'Market', 'Mercado')}<select value={marketId} disabled={loading || !data?.markets.length} onChange={e => { setMarketId(e.target.value); void load(e.target.value, hours); }}>{data?.markets.length ? data.markets.map(m => <option key={m.id} value={m.id}>{m.name} · {m.unit} · {m.isOpen ? t(locale, 'open', 'abierto') : t(locale, 'closed', 'cerrado')}</option>) : <option>{t(locale, 'Loading markets', 'Cargando mercados')}</option>}</select></label><label>{t(locale, 'Closed hourly history', 'Historial horario cerrado')}<select value={hours} disabled={loading} onChange={e => { setHours(e.target.value); void load(marketId, e.target.value); }}><option value="6">6h</option><option value="24">24h</option><option value="168">7d</option><option value="720">30d</option></select></label><span className={`status-badge status-${!requestError && data?.status === 'AVAILABLE' ? 'live' : 'unavailable'}`}>{loading ? t(locale, 'LOADING', 'CARGANDO') : requestError&&data?t(locale,'PREVIOUS SNAPSHOT','CAPTURA ANTERIOR'):data?.status ?? 'UNAVAILABLE'}</span></div>
+ {loading && <div className="research-state" role="status">{slow?t(locale,'Still waiting for Perpl. This request stops after 23 seconds.','Aún se espera Perpl. Esta solicitud termina tras 23 segundos.'):t(locale, 'Reading independent Perpl endpoints…', 'Leyendo endpoints independientes de Perpl…')}</div>}
+ {!loading && requestError && <div className="research-state research-error" role="alert">{requestError==='CLIENT_TIMEOUT'?t(locale,'No complete response within 23 seconds. Retry this snapshot.','No hubo respuesta completa en 23 segundos. Reintenta esta captura.'):requestError==='INVALID_JSON'||requestError==='INVALID_RESPONSE'||requestError==='RESPONSE_SCOPE_MISMATCH'?t(locale,'The response could not be validated. It was not used as market evidence.','No se pudo validar la respuesta. No se usó como evidencia de mercado.'):t(locale,'This request failed. You can retry without changing markets.','Esta solicitud falló. Puedes reintentar sin cambiar de mercado.')} {data&&<p>{t(locale,'Previous snapshot retained for the same market and period; timestamps are unchanged. It is not a newly verified response.','Se conserva la captura anterior del mismo mercado y periodo; sus fechas no cambian. No es una respuesta recién verificada.')}</p>} <code>{requestError}</code></div>}
+ {m && <> <p className="research-source-note">{t(locale, 'Exchange', 'Exchange')}: <a href={`https://monadscan.com/address/${m.exchange}`} target="_blank" rel="noreferrer">{m.exchange}<ExternalLink /></a> · {m.collateral} {t(locale, 'collateral', 'como colateral')}</p>
  {a && <><div className="perpl-metrics"><article><span>{t(locale, 'MARK / ORACLE · USD REFERENCE', 'MARK / ORÁCULO · REFERENCIA USD')}</span><strong>{num(a.mark, locale, 6)} / {num(a.oracle, locale, 6)}</strong><p>{t(locale, 'Last executed', 'Último ejecutado')}: {num(a.last, locale, 6)}</p></article><article><span>{t(locale, 'REPORTED DAILY VOLUME', 'VOLUMEN DIARIO REPORTADO')}</span><strong>{num(a.dailyVolumeCollateral, locale, 2)} {m.collateral}</strong><p>{num(a.dailyVolumeBase, locale)} {m.unit}</p></article><article><span>{t(locale, 'OPEN INTEREST', 'INTERÉS ABIERTO')}</span><strong>{num(a.openInterestBase, locale)} {m.unit}</strong><p>{t(locale, 'Provider position size; no wallet identities', 'Tamaño de posiciones del proveedor; sin identidades')}</p></article><article><span>{t(locale, 'STATE EVIDENCE', 'EVIDENCIA DE ESTADO')}</span><strong><a href={`https://monadscan.com/block/${a.block}`} target="_blank" rel="noreferrer">#{a.block}<ExternalLink /></a></strong><p>{date(a.timestamp, locale)} · {age}s {t(locale, 'at capture', 'al capturar')} {age! > 120 ? 'STALE' : ''}</p></article></div></>}
- <PerplRiskInvestigator data={data} locale={locale} onCompare={()=>{setHours('720');void load(marketId,'720');}} onCandle={timestamp=>{setSelected(timestamp);document.querySelector('.perpl-history')?.scrollIntoView({behavior:'auto',block:'start'});}}/><div className="perpl-layout"><article className="perpl-history"><header><h2>{t(locale, 'Inspect closed candles', 'Inspeccionar velas cerradas')}</h2><span>{h ? `${h.candles.length}/${h.expectedBars}` : t(locale, 'UNAVAILABLE', 'NO DISPONIBLE')}</span></header>{h?.candles.length ? <><p>{date(h.from, locale)} → {date(h.to, locale)} · {t(locale, '1h bars', 'velas 1h')}</p><svg viewBox="0 0 640 180" className="perpl-chart" role="group" aria-label={t(locale, 'Select a real hourly closing price', 'Selecciona un cierre horario real')}><polyline fill="none" stroke="#f0b90b" strokeWidth="2" points={h.candles.map(c => { const p = point(c.timestamp, c.close); return `${p.x},${p.y}`; }).join(' ')}/>{h.candles.map(c => { const p = point(c.timestamp, c.close); return <circle key={c.timestamp} cx={p.x} cy={p.y} r={c.timestamp === candle?.timestamp ? 6 : 4} fill={c.timestamp === candle?.timestamp ? '#fff0a4' : '#f0b90b'} role="button" tabIndex={0} aria-label={date(c.timestamp, locale) + ' · ' + num(c.close, locale, 6)} onClick={() => setSelected(c.timestamp)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') {
+ <PerplRiskInvestigator data={data} locale={locale} onCompare={()=>{if(!loading){setHours('720');void load(marketId,'720');}}} onCandle={timestamp=>{setSelected(timestamp);document.querySelector('.perpl-history')?.scrollIntoView({behavior:'auto',block:'start'});}}/><div className="perpl-layout"><article className="perpl-history"><header><h2>{t(locale, 'Inspect closed candles', 'Inspeccionar velas cerradas')}</h2><span>{h ? `${h.candles.length}/${h.expectedBars}` : t(locale, 'UNAVAILABLE', 'NO DISPONIBLE')}</span></header>{h?.candles.length ? <><p>{date(h.from, locale)} → {date(h.to, locale)} · {t(locale, '1h bars', 'velas 1h')}</p><svg viewBox="0 0 640 180" className="perpl-chart" role="group" aria-label={t(locale, 'Select a real hourly closing price', 'Selecciona un cierre horario real')}><polyline fill="none" stroke="#f0b90b" strokeWidth="2" points={h.candles.map(c => { const p = point(c.timestamp, c.close); return `${p.x},${p.y}`; }).join(' ')}/>{h.candles.map(c => { const p = point(c.timestamp, c.close); return <circle key={c.timestamp} cx={p.x} cy={p.y} r={c.timestamp === candle?.timestamp ? 6 : 4} fill={c.timestamp === candle?.timestamp ? '#fff0a4' : '#f0b90b'} role="button" tabIndex={0} aria-label={date(c.timestamp, locale) + ' · ' + num(c.close, locale, 6)} onClick={() => setSelected(c.timestamp)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             setSelected(c.timestamp);
         } }}/>; })}<text x="608" y="20" textAnchor="end" fill="#9cabb7" fontSize="10">{num(max, locale, 6)}</text><text x="608" y="170" textAnchor="end" fill="#9cabb7" fontSize="10">{num(min, locale, 6)}</text></svg>{candle && <dl className="perpl-candle-detail"><div><dt>{t(locale, 'Candle opens', 'Apertura de vela')}</dt><dd>{date(candle.timestamp, locale)}</dd></div><div><dt>O / H / L / C</dt><dd>{[candle.open, candle.high, candle.low, candle.close].map(v => num(v, locale, 6)).join(' / ')}</dd></div><div><dt>{t(locale, 'Executed volume', 'Volumen ejecutado')}</dt><dd>{num(candle.volume, locale)} {m.collateral} · {candle.trades} {t(locale, 'trades', 'operaciones')}</dd></div></dl>}<p>{t(locale, 'Observed closed-candle volume', 'Volumen observado en velas cerradas')}: {num(h.observedVolumeCollateral, locale, 2)} {m.collateral} · {h.complete ? t(locale, 'full requested coverage', 'cobertura solicitada completa') : t(locale, 'incomplete coverage; no full-period total claimed', 'cobertura incompleta; no se afirma un total del periodo completo')}</p></> : <p className="research-state">{h ? t(locale, 'No closed candles were returned in this period.', 'No se devolvieron velas cerradas en este periodo.') : t(locale, 'Candle history unavailable; other sections remain independent.', 'Historial de velas no disponible; las otras secciones siguen independientes.')}</p>}</article>
@@ -70,5 +80,6 @@ export function PerplIntelligence({ locale, spot }: {
  <div className="research-actions"><button className="secondary-action" onClick={exportData}><Download />{t(locale, 'Export Perpl evidence', 'Exportar evidencia Perpl')}</button><a className="secondary-action" href={PERPL_DOCS} target="_blank" rel="noreferrer">{t(locale, 'Official API documentation', 'Documentación oficial de API')}<ExternalLink /></a></div>
  <details className="technical-disclosure"><summary>{t(locale, 'Advanced source and scaling evidence', 'Evidencia avanzada de fuentes y escalas')}</summary><p>{data.requestId} · {data.observedAt} · {t(locale, 'public GET requests, no authentication or signatures', 'consultas GET públicas, sin autenticación ni firmas')}</p><p>{t(locale, 'Price decimals', 'Decimales de precio')}: {m.priceDecimals} · {t(locale, 'size decimals', 'decimales de tamaño')}: {m.sizeDecimals} · {m.collateral}: {m.collateralDecimals}</p><ul>{data.traces.map(trace => <li key={trace.path}>{trace.path} · {trace.status} · HTTP {trace.http ?? '—'} {trace.error ?? ''} {trace.cached ? t(locale, 'cached context', 'contexto en caché') : ''} {trace.observedAt ?? ''}</li>)}</ul><p>{t(locale, 'This is provider-reported perpetual market evidence, not Kuru spot Trade events. No account positions, liquidation predictions or identity labels are inferred.', 'Es evidencia de mercado perpetuo reportada por el proveedor, no eventos Trade spot de Kuru. No se infieren posiciones de cuentas, predicciones de liquidación ni etiquetas de identidad.')}</p></details>
  </>}
+ <details className="technical-disclosure perpl-request-diagnostics"><summary>{t(locale,'Request diagnostics','Diagnóstico de solicitudes')}</summary><p>{t(locale,'Local request metadata only. No credentials or raw provider errors. Navigation cancellations do not invalidate a completed snapshot.','Solo metadatos de solicitudes. Sin credenciales ni errores crudos del proveedor. Las cancelaciones por navegación no invalidan una captura completada.')}</p><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',fontSize:'.72rem'}}>{JSON.stringify(traces,null,2)}</pre></details>
  </section>;
 }
